@@ -18,19 +18,22 @@ function CadastroUsuarios() {
 
   useEffect(() => {
     if (idParam) {
-      axios.get('/db.json')
-        .then(response => {
-          const usuario = (response.data.usuarios || []).find(u => u.id === Number(idParam));
+      axios
+        .get('/db.json')
+        .then((response) => {
+          const usuario = (response.data?.usuarios || []).find(
+            (u) => Number(u.id) === Number(idParam)
+          );
           if (usuario) {
             setId(usuario.id);
-            setNome(usuario.nome);
-            setEmail(usuario.email);
-            setSenha(usuario.senha);
-            setPerfil(usuario.perfil);
-            setAtivo(usuario.ativo);
+            setNome(usuario.nome || '');
+            setEmail(usuario.email || '');
+            setSenha(usuario.senha || '');
+            setPerfil(usuario.perfil || 'OPERADOR');
+            setAtivo(usuario.ativo !== undefined ? usuario.ativo : true);
           }
         })
-        .catch(error => console.error("Erro:", error));
+        .catch((error) => console.error('Erro:', error));
     }
   }, [idParam]);
 
@@ -39,7 +42,17 @@ function CadastroUsuarios() {
   };
 
   const salvar = () => {
-    alert("Usuário salvo com sucesso!");
+    const usuarioData = {
+      id: id ? Number(id) : Date.now(),
+      nome: String(nome || '').trim(),
+      email: String(email || '').trim(),
+      senha,
+      perfil,
+      ativo,
+    };
+
+    console.log('Salvando usuário:', usuarioData);
+    alert('Usuário salvo com sucesso!');
     navigate('/listagem-usuarios');
   };
 

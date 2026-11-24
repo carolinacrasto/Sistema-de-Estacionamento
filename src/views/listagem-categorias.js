@@ -24,15 +24,21 @@ function ListagemCategorias() {
   };
 
   useEffect(() => {
-    axios.get('/db.json')
-      .then(response => {
-        const lista = response.data.categorias || [];
+    axios
+      .get('/db.json')
+      .then((response) => {
+        const lista = response.data?.categorias || [];
         setCategorias(lista);
       })
-      .catch(error => {
-        console.error("Erro ao buscar categorias:", error);
+      .catch((error) => {
+        console.error('Erro ao buscar categorias:', error);
       });
   }, []);
+
+  const formatarMoeda = (valor) => {
+    const num = Number(valor || 0);
+    return `R$ ${num.toFixed(2).replace('.', ',')}`;
+  };
 
   return (
     <div className='container'>
@@ -45,7 +51,7 @@ function ListagemCategorias() {
                 className='btn btn-warning mb-3'
                 onClick={() => cadastrar()}
               >
-                NNova Categoria
+                Nova Categoria
               </button>
               <table className='table table-hover'>
                 <thead>
@@ -66,9 +72,9 @@ function ListagemCategorias() {
                     <tr key={dado.id}>
                       <td>{dado.id}</td>
                       <td>{dado.nome}</td>
-                      <td>R$ {dado.valorHora},00</td>
-                      <td>R$ {dado.valorDiaria},00</td>
-                      <td>R$ {dado.valorPernoite},00</td>
+                      <td>{formatarMoeda(dado.valorHora)}</td>
+                      <td>{formatarMoeda(dado.valorDiaria)}</td>
+                      <td>{formatarMoeda(dado.valorPernoite)}</td>
                       <td>{dado.vagasTotais}</td>
                       <td>{dado.vagasOcupadas}</td>
                       <td>{dado.ativo ? 'Sim' : 'Não'}</td>

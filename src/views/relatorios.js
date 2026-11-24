@@ -2,17 +2,6 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Card from '../components/card';
 
-function lerStorageOuFallback(chave, fallback) {
-  try {
-    const raw = localStorage.getItem(chave);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : fallback;
-  } catch (e) {
-    return fallback;
-  }
-}
-
 function normalizarData(valor) {
   if (!valor) return '';
   return String(valor).trim().slice(0, 10);
@@ -45,13 +34,13 @@ function Relatorios() {
         const dbTickets = response.data?.tickets || [];
         const dbPagamentos = response.data?.pagamentos || [];
 
-        setTickets(lerStorageOuFallback('scac_tickets', dbTickets));
-        setPagamentos(lerStorageOuFallback('scac_pagamentos', dbPagamentos));
+        setTickets(dbTickets);
+        setPagamentos(dbPagamentos);
       })
       .catch((error) => {
         console.error('Erro ao carregar dados para relatórios:', error);
-        setTickets(lerStorageOuFallback('scac_tickets', []));
-        setPagamentos(lerStorageOuFallback('scac_pagamentos', []));
+        setTickets([]);
+        setPagamentos([]);
       });
   }, []);
 

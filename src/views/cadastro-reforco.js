@@ -5,13 +5,16 @@ import Card from '../components/card';
 import FormGroup from '../components/form-group';
 import axios from 'axios';
 
+const USUARIO_PADRAO = {
+  id: 1,
+  nome: 'Operador',
+  perfil: 'OPERADOR',
+};
+
 function CadastroReforco() {
   const navigate = useNavigate();
 
-  const usuarioLogado = JSON.parse(
-    localStorage.getItem('usuario_logado') || 'null'
-  );
-
+  const [usuarioLogado, setUsuarioLogado] = useState(USUARIO_PADRAO);
   const [caixaAberto, setCaixaAberto] = useState(null);
   const [carregandoCaixa, setCarregandoCaixa] = useState(true);
   const [valor, setValor] = useState('');
@@ -23,6 +26,12 @@ function CadastroReforco() {
       .get('/db.json')
       .then((response) => {
         const listaCaixa = response.data?.caixa || [];
+        const listaUsuarios = response.data?.usuarios || [];
+        const operadorBase =
+          listaUsuarios.find((u) => u.ativo !== false) || USUARIO_PADRAO;
+
+        setUsuarioLogado(operadorBase);
+
         const aberto = listaCaixa.find(
           (c) => String(c.status || '').toUpperCase() === 'ABERTO'
         );
@@ -64,8 +73,12 @@ function CadastroReforco() {
     const reforcoData = {
       id: Date.now(),
       caixaId: caixaAberto.id,
-      usuarioId: usuarioLogado?.id ?? caixaAberto.usuarioId,
-      nomeOperador: usuarioLogado?.nome ?? caixaAberto.nomeOperador,
+      usuarioId: usuarioLogado?.id ?? caixaAberto.usuarioId ?? USUARIO_PADRAO.id,
+      nomeOperador:
+        usuarioLogado?.nome ??
+        caixaAberto.nomeOperador ??
+        caixaAberto.usuarioNome ??
+        USUARIO_PADRAO.nome,
       valor: Number(valorNum.toFixed(2)),
       descricao: descricao.trim(),
       data: agora.toISOString().split('T')[0],
@@ -95,7 +108,12 @@ function CadastroReforco() {
               ) : (
                 <div className='alert alert-info py-2 px-3 mb-3'>
                   Caixa aberto #{caixaAberto.id} — Operador:{' '}
-                  <strong>{usuarioLogado?.nome || caixaAberto.nomeOperador}</strong>{' '}
+                  <strong>
+                    {usuarioLogado?.nome ||
+                      caixaAberto.nomeOperador ||
+                      caixaAberto.usuarioNome ||
+                      USUARIO_PADRAO.nome}
+                  </strong>{' '}
                   | Valor inicial: R${' '}
                   {Number(caixaAberto.valorInicial || 0)
                     .toFixed(2)

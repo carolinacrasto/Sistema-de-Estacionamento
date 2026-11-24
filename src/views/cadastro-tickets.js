@@ -19,17 +19,6 @@ function obterDataHoraAtual() {
   };
 }
 
-function lerStorageOuFallback(chave, fallback) {
-  try {
-    const raw = localStorage.getItem(chave);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : fallback;
-  } catch (e) {
-    return fallback;
-  }
-}
-
 function CadastroTickets() {
   const { idParam } = useParams();
   const navigate = useNavigate();
@@ -52,21 +41,8 @@ function CadastroTickets() {
     axios
       .get('/db.json')
       .then((response) => {
-        const dbCategorias = response.data?.categorias || [];
-        const dbTickets = response.data?.tickets || [];
-
-        if (!localStorage.getItem('scac_categorias') && dbCategorias.length > 0) {
-          localStorage.setItem('scac_categorias', JSON.stringify(dbCategorias));
-        }
-        if (!localStorage.getItem('scac_tickets') && dbTickets.length > 0) {
-          localStorage.setItem('scac_tickets', JSON.stringify(dbTickets));
-        }
-
-        const listaCategorias = lerStorageOuFallback(
-          'scac_categorias',
-          dbCategorias
-        );
-        const listaTickets = lerStorageOuFallback('scac_tickets', dbTickets);
+        const listaCategorias = response.data?.categorias || [];
+        const listaTickets = response.data?.tickets || [];
 
         setCategorias(listaCategorias);
         setTickets(listaTickets);
@@ -139,15 +115,9 @@ function CadastroTickets() {
       return;
     }
 
-    const ticketsAtuais = lerStorageOuFallback('scac_tickets', tickets);
-    const categoriasAtuais = lerStorageOuFallback(
-      'scac_categorias',
-      categorias
-    );
-
     if (!idParam) {
       // RN01 / RF13: verificar se já existe ticket em aberto para a mesma placa
-      const jaAberto = ticketsAtuais.find(
+      const jaAberto = tickets.find(
         (t) =>
           String(t.placa || '')
             .trim()
@@ -163,7 +133,7 @@ function CadastroTickets() {
       }
 
       // RN02 / RF11 / RF12: verificar disponibilidade de vagas
-      const catAtual = categoriasAtuais.find(
+      const catAtual = categorias.find(
         (c) => Number(c.id) === Number(categoriaId)
       );
       const livres = catAtual
@@ -184,8 +154,7 @@ function CadastroTickets() {
 
     const novoId = idParam
       ? Number(idParam)
-      : ticketsAtuais.reduce((max, t) => Math.max(max, Number(t.id || 0)), 0) +
-        1;
+      : tickets.reduce((max, t) => Math.max(max, Number(t.id || 0)), 0) + 1;
 
     const ticketSalvo = {
       id: novoId,
@@ -201,24 +170,22 @@ function CadastroTickets() {
     };
 
     const novosTickets = idParam
-      ? ticketsAtuais.map((t) =>
+      ? tickets.map((t) =>
           Number(t.id) === Number(idParam) ? { ...t, ...ticketSalvo } : t
         )
-      : [...ticketsAtuais, ticketSalvo];
+      : [...tickets, ticketSalvo];
 
-    localStorage.setItem('scac_tickets', JSON.stringify(novosTickets));
     setTickets(novosTickets);
 
     // RN03: ocupar 1 vaga na categoria correspondente ao registrar nova entrada
     if (!idParam) {
-      const novasCategorias = categoriasAtuais.map((cat) => {
+      const novasCategorias = categorias.map((cat) => {
         if (Number(cat.id) !== Number(categoriaSelecionada.id)) return cat;
         return {
           ...cat,
           vagasOcupadas: Number(cat.vagasOcupadas || 0) + 1,
         };
       });
-      localStorage.setItem('scac_categorias', JSON.stringify(novasCategorias));
       setCategorias(novasCategorias);
       setDataEntrada(dataFinal);
       setHoraEntrada(horaFinal);

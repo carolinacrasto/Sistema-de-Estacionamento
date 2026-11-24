@@ -15,24 +15,29 @@ function CadastroCategorias() {
   const [valorDiaria, setValorDiaria] = useState('');
   const [valorPernoite, setValorPernoite] = useState('');
   const [vagasTotais, setVagasTotais] = useState('');
+  const [vagasOcupadas, setVagasOcupadas] = useState(0);
   const [ativo, setAtivo] = useState(true);
 
   useEffect(() => {
     if (idParam) {
-      axios.get('/db.json')
-        .then(response => {
-          const cat = (response.data.categorias || []).find(c => c.id === Number(idParam));
+      axios
+        .get('/db.json')
+        .then((response) => {
+          const cat = (response.data?.categorias || []).find(
+            (c) => Number(c.id) === Number(idParam)
+          );
           if (cat) {
             setId(cat.id);
-            setNome(cat.nome);
-            setValorHora(cat.valorHora);
-            setValorDiaria(cat.valorDiaria);
-            setValorPernoite(cat.valorPernoite);
-            setVagasTotais(cat.vagasTotais);
-            setAtivo(cat.ativo);
+            setNome(cat.nome || '');
+            setValorHora(cat.valorHora ?? '');
+            setValorDiaria(cat.valorDiaria ?? '');
+            setValorPernoite(cat.valorPernoite ?? '');
+            setVagasTotais(cat.vagasTotais ?? '');
+            setVagasOcupadas(cat.vagasOcupadas ?? 0);
+            setAtivo(cat.ativo !== undefined ? cat.ativo : true);
           }
         })
-        .catch(error => console.error("Erro:", error));
+        .catch((error) => console.error('Erro:', error));
     }
   }, [idParam]);
 
@@ -41,7 +46,19 @@ function CadastroCategorias() {
   };
 
   const salvar = () => {
-    alert("Categoria salva com sucesso!");
+    const categoriaData = {
+      id: id ? Number(id) : Date.now(),
+      nome: String(nome || '').trim(),
+      valorHora: Number(valorHora || 0),
+      valorDiaria: Number(valorDiaria || 0),
+      valorPernoite: Number(valorPernoite || 0),
+      vagasTotais: Number(vagasTotais || 0),
+      vagasOcupadas: Number(vagasOcupadas || 0),
+      ativo,
+    };
+
+    console.log('Salvando categoria:', categoriaData);
+    alert('Categoria salva com sucesso!');
     navigate('/listagem-categorias');
   };
 

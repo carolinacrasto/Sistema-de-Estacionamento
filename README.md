@@ -55,7 +55,6 @@ Projeto acadêmico desenvolvido para a disciplina de **Linguagem de Programaçã
 - **React Router DOM** (roteamento e proteção de rotas por perfil)
 - **Axios** (consumo da base estruturada em JSON)
 - **Bootstrap / Bootswatch** & **Material UI (`@mui/material`)** (estilização e componentes de interface)
-- **LocalStorage** (persistência das operações em sessão no navegador)
 
 ---
 

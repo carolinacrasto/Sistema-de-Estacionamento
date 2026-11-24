@@ -1,17 +1,26 @@
 import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 
 function NavbarItem({ render, ...props }) {
-  if (render) {
-    return (
-      <li className='nav-item'>
-        <a onClick={props.onClick} className='nav-link' href={props.href}>
-          {props.label}
-        </a>
-      </li>
-    );
-  } else {
-    return false;
+  const location = useLocation();
+
+  if (!render) {
+    return null;
   }
+
+  const isActive = location.pathname === props.href;
+
+  return (
+    <li className='nav-item'>
+      <Link
+        to={props.href}
+        onClick={props.onClick}
+        className={`nav-link ${isActive ? 'active fw-semibold' : ''}`}
+      >
+        {props.label}
+      </Link>
+    </li>
+  );
 }
 
 export default NavbarItem;

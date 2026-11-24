@@ -1,44 +1,34 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Route, Routes, BrowserRouter, Navigate } from 'react-router-dom';
 
-import Login from './views/login';
-import Dashboard from './views/dashboard';
-import Relatorios from './views/relatorios';
+import Navbar from './components/navbar.js';
 
-import ListagemTickets from './views/listagem-tickets';
-import CadastroTickets from './views/cadastro-tickets';
+import Login from './views/login.js';
+import Dashboard from './views/dashboard.js';
+import Relatorios from './views/relatorios.js';
 
-import ListagemCaixa from './views/listagem-caixa';
-import CadastroCaixa from './views/cadastro-caixa';
-import CadastroSangria from './views/cadastro-sangria';
-import CadastroReforco from './views/cadastro-reforco';
+import ListagemTickets from './views/listagem-tickets.js';
+import CadastroTickets from './views/cadastro-tickets.js';
 
-import ListagemCategorias from './views/listagem-categorias';
-import CadastroCategorias from './views/cadastro-categorias';
+import ListagemCaixa from './views/listagem-caixa.js';
+import CadastroCaixa from './views/cadastro-caixa.js';
+import CadastroSangria from './views/cadastro-sangria.js';
+import CadastroReforco from './views/cadastro-reforco.js';
 
-import ListagemPagamentos from './views/listagem-pagamentos';
-import CadastroPagamentos from './views/cadastro-pagamentos';
+import ListagemCategorias from './views/listagem-categorias.js';
+import CadastroCategorias from './views/cadastro-categorias.js';
 
-import ListagemUsuarios from './views/listagem-usuarios';
-import CadastroUsuarios from './views/cadastro-usuarios';
+import ListagemPagamentos from './views/listagem-pagamentos.js';
+import CadastroPagamentos from './views/cadastro-pagamentos.js';
 
-function obterUsuarioLogado() {
-  try {
-    const bruto = localStorage.getItem('usuario_logado');
-    if (!bruto) return null;
-    const parsed = JSON.parse(bruto);
-    return parsed && (parsed.id || parsed.email) ? parsed : null;
-  } catch (error) {
-    return null;
-  }
-}
+import ListagemUsuarios from './views/listagem-usuarios.js';
+import CadastroUsuarios from './views/cadastro-usuarios.js';
 
 function ehAdmin(usuario) {
-  return String(usuario?.perfil || '').toUpperCase() === 'ADMIN';
+  return String(usuario?.perfil || '').trim().toUpperCase() === 'ADMIN';
 }
 
-function RotaProtegida({ children, apenasAdmin = false }) {
-  const usuario = obterUsuarioLogado();
+function RotaProtegida({ children, apenasAdmin = false, usuario }) {
   if (!usuario) {
     return <Navigate to='/login' replace />;
   }
@@ -48,26 +38,28 @@ function RotaProtegida({ children, apenasAdmin = false }) {
   return children;
 }
 
-function RotaInicial() {
-  const usuario = obterUsuarioLogado();
-  if (usuario) {
-    return <Navigate to='/dashboard' replace />;
-  }
-  return <Navigate to='/login' replace />;
-}
-
 function Rotas() {
+  const [usuarioAtual, setUsuarioAtual] = useState(null);
+
   return (
     <BrowserRouter>
+      <Navbar
+        usuarioLogado={usuarioAtual}
+        onLogout={() => setUsuarioAtual(null)}
+      />
+
       <Routes>
-        <Route path='/' element={<RotaInicial />} />
-        <Route path='/login' element={<Login />} />
+        <Route path='/' element={<Navigate to='/login' replace />} />
+        <Route
+          path='/login'
+          element={<Login onLogin={(user) => setUsuarioAtual(user)} />}
+        />
 
         <Route
           path='/dashboard'
           element={
-            <RotaProtegida>
-              <Dashboard />
+            <RotaProtegida usuario={usuarioAtual}>
+              <Dashboard usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
@@ -75,8 +67,8 @@ function Rotas() {
         <Route
           path='/relatorios'
           element={
-            <RotaProtegida apenasAdmin={true}>
-              <Relatorios />
+            <RotaProtegida apenasAdmin={true} usuario={usuarioAtual}>
+              <Relatorios usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
@@ -85,24 +77,24 @@ function Rotas() {
         <Route
           path='/listagem-tickets'
           element={
-            <RotaProtegida>
-              <ListagemTickets />
+            <RotaProtegida usuario={usuarioAtual}>
+              <ListagemTickets usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
         <Route
           path='/cadastro-tickets'
           element={
-            <RotaProtegida>
-              <CadastroTickets />
+            <RotaProtegida usuario={usuarioAtual}>
+              <CadastroTickets usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
         <Route
           path='/cadastro-tickets/:idParam'
           element={
-            <RotaProtegida>
-              <CadastroTickets />
+            <RotaProtegida usuario={usuarioAtual}>
+              <CadastroTickets usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
@@ -111,40 +103,40 @@ function Rotas() {
         <Route
           path='/listagem-caixa'
           element={
-            <RotaProtegida>
-              <ListagemCaixa />
+            <RotaProtegida usuario={usuarioAtual}>
+              <ListagemCaixa usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
         <Route
           path='/cadastro-caixa'
           element={
-            <RotaProtegida>
-              <CadastroCaixa />
+            <RotaProtegida usuario={usuarioAtual}>
+              <CadastroCaixa usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
         <Route
           path='/cadastro-caixa/:idParam'
           element={
-            <RotaProtegida>
-              <CadastroCaixa />
+            <RotaProtegida usuario={usuarioAtual}>
+              <CadastroCaixa usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
         <Route
           path='/cadastro-sangria'
           element={
-            <RotaProtegida>
-              <CadastroSangria />
+            <RotaProtegida usuario={usuarioAtual}>
+              <CadastroSangria usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
         <Route
           path='/cadastro-reforco'
           element={
-            <RotaProtegida>
-              <CadastroReforco />
+            <RotaProtegida usuario={usuarioAtual}>
+              <CadastroReforco usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
@@ -153,24 +145,24 @@ function Rotas() {
         <Route
           path='/listagem-categorias'
           element={
-            <RotaProtegida apenasAdmin={true}>
-              <ListagemCategorias />
+            <RotaProtegida apenasAdmin={true} usuario={usuarioAtual}>
+              <ListagemCategorias usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
         <Route
           path='/cadastro-categorias'
           element={
-            <RotaProtegida apenasAdmin={true}>
-              <CadastroCategorias />
+            <RotaProtegida apenasAdmin={true} usuario={usuarioAtual}>
+              <CadastroCategorias usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
         <Route
           path='/cadastro-categorias/:idParam'
           element={
-            <RotaProtegida apenasAdmin={true}>
-              <CadastroCategorias />
+            <RotaProtegida apenasAdmin={true} usuario={usuarioAtual}>
+              <CadastroCategorias usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
@@ -179,24 +171,24 @@ function Rotas() {
         <Route
           path='/listagem-pagamentos'
           element={
-            <RotaProtegida>
-              <ListagemPagamentos />
+            <RotaProtegida usuario={usuarioAtual}>
+              <ListagemPagamentos usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
         <Route
           path='/cadastro-pagamentos'
           element={
-            <RotaProtegida>
-              <CadastroPagamentos />
+            <RotaProtegida usuario={usuarioAtual}>
+              <CadastroPagamentos usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
         <Route
           path='/cadastro-pagamentos/:idParam'
           element={
-            <RotaProtegida>
-              <CadastroPagamentos />
+            <RotaProtegida usuario={usuarioAtual}>
+              <CadastroPagamentos usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
@@ -205,29 +197,29 @@ function Rotas() {
         <Route
           path='/listagem-usuarios'
           element={
-            <RotaProtegida apenasAdmin={true}>
-              <ListagemUsuarios />
+            <RotaProtegida apenasAdmin={true} usuario={usuarioAtual}>
+              <ListagemUsuarios usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
         <Route
           path='/cadastro-usuarios'
           element={
-            <RotaProtegida apenasAdmin={true}>
-              <CadastroUsuarios />
+            <RotaProtegida apenasAdmin={true} usuario={usuarioAtual}>
+              <CadastroUsuarios usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
         <Route
           path='/cadastro-usuarios/:idParam'
           element={
-            <RotaProtegida apenasAdmin={true}>
-              <CadastroUsuarios />
+            <RotaProtegida apenasAdmin={true} usuario={usuarioAtual}>
+              <CadastroUsuarios usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }
         />
 
-        <Route path='*' element={<RotaInicial />} />
+        <Route path='*' element={<Navigate to='/login' replace />} />
       </Routes>
     </BrowserRouter>
   );

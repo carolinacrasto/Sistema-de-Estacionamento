@@ -5,19 +5,20 @@ import Card from '../components/card';
 import FormGroup from '../components/form-group';
 import axios from 'axios';
 
+const USUARIO_PADRAO = {
+  id: 1,
+  nome: 'Operador',
+  perfil: 'OPERADOR',
+};
+
 function CadastroCaixa() {
   const { idParam } = useParams();
   const navigate = useNavigate();
 
-  const usuarioLogado = JSON.parse(
-    localStorage.getItem('usuario_logado') || 'null'
-  );
-
+  const [usuarioLogado, setUsuarioLogado] = useState(USUARIO_PADRAO);
   const [id, setId] = useState('');
-  const [usuarioId, setUsuarioId] = useState(
-    usuarioLogado?.id ? Number(usuarioLogado.id) : ''
-  );
-  const [usuarioNome, setUsuarioNome] = useState(usuarioLogado?.nome || '');
+  const [usuarioId, setUsuarioId] = useState(USUARIO_PADRAO.id);
+  const [usuarioNome, setUsuarioNome] = useState(USUARIO_PADRAO.nome);
   const [dataAbertura, setDataAbertura] = useState('');
   const [horaAbertura, setHoraAbertura] = useState('');
   const [valorInicial, setValorInicial] = useState('');
@@ -29,25 +30,30 @@ function CadastroCaixa() {
   const [reforcos, setReforcos] = useState([]);
 
   useEffect(() => {
-    if (idParam) {
-      axios
-        .get('/db.json')
-        .then((response) => {
-          const listaCaixa = response.data?.caixa || [];
-          const listaUsuarios = response.data?.usuarios || [];
+    axios
+      .get('/db.json')
+      .then((response) => {
+        const listaCaixa = response.data?.caixa || [];
+        const listaUsuarios = response.data?.usuarios || [];
+        const operadorBase =
+          listaUsuarios.find((u) => u.ativo !== false) || USUARIO_PADRAO;
+
+        setUsuarioLogado(operadorBase);
+
+        if (idParam) {
           const caixaEncontrado = listaCaixa.find(
             (c) => Number(c.id) === Number(idParam)
           );
 
           if (caixaEncontrado) {
             setId(caixaEncontrado.id);
-            setUsuarioId(caixaEncontrado.usuarioId);
+            setUsuarioId(caixaEncontrado.usuarioId || operadorBase.id);
 
             const dono = listaUsuarios.find(
               (u) => Number(u.id) === Number(caixaEncontrado.usuarioId)
             );
             setUsuarioNome(
-              caixaEncontrado.usuarioNome || dono?.nome || usuarioLogado?.nome || ''
+              caixaEncontrado.usuarioNome || dono?.nome || operadorBase.nome
             );
 
             setDataAbertura(caixaEncontrado.dataAbertura || '');
@@ -70,19 +76,26 @@ function CadastroCaixa() {
             setSangrias(caixaEncontrado.sangrias || []);
             setReforcos(caixaEncontrado.reforcos || []);
           }
-        })
-        .catch((error) => console.error('Erro ao carregar caixa:', error));
-    } else {
-      const agora = new Date();
-      const dataHoje = agora.toISOString().split('T')[0];
-      const horaAtual = agora.toTimeString().slice(0, 5);
-      setDataAbertura(dataHoje);
-      setHoraAbertura(horaAtual);
-      if (usuarioLogado) {
-        setUsuarioId(Number(usuarioLogado.id));
-        setUsuarioNome(usuarioLogado.nome);
-      }
-    }
+        } else {
+          const agora = new Date();
+          const dataHoje = agora.toISOString().split('T')[0];
+          const horaAtual = agora.toTimeString().slice(0, 5);
+          setDataAbertura(dataHoje);
+          setHoraAbertura(horaAtual);
+          setUsuarioId(Number(operadorBase.id));
+          setUsuarioNome(operadorBase.nome);
+        }
+      })
+      .catch((error) => {
+        console.error('Erro ao carregar caixa:', error);
+        if (!idParam) {
+          const agora = new Date();
+          setDataAbertura(agora.toISOString().split('T')[0]);
+          setHoraAbertura(agora.toTimeString().slice(0, 5));
+          setUsuarioId(USUARIO_PADRAO.id);
+          setUsuarioNome(USUARIO_PADRAO.nome);
+        }
+      });
   }, [idParam]);
 
   const inicializar = () => {
@@ -92,8 +105,8 @@ function CadastroCaixa() {
   const salvar = () => {
     const caixaData = {
       id: id ? Number(id) : Date.now(),
-      usuarioId: Number(usuarioId),
-      usuarioNome,
+      usuarioId: Number(usuarioId || usuarioLogado?.id || 1),
+      usuarioNome: usuarioNome || usuarioLogado?.nome || USUARIO_PADRAO.nome,
       dataAbertura,
       horaAbertura,
       valorInicial: Number(valorInicial || 0),
@@ -120,7 +133,7 @@ function CadastroCaixa() {
                 <input
                   type='text'
                   id='inputOperador'
-                  value={usuarioNome || 'Usuário logado'}
+                  value={usuarioNome || usuarioLogado?.nome || 'Usuário logado'}
                   className='form-control'
                   disabled
                   readOnly

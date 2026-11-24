@@ -9,7 +9,7 @@ import EditIcon from '@mui/icons-material/Edit';
 
 function ListagemUsuarios() {
   const navigate = useNavigate();
-  const [usuarios, setUsuarios] = useState([]); 
+  const [usuarios, setUsuarios] = useState([]);
 
   const cadastrar = () => {
     navigate('/cadastro-usuarios');
@@ -20,18 +20,18 @@ function ListagemUsuarios() {
   };
 
   const excluir = (id) => {
-   
     setUsuarios(usuarios.filter((usuario) => usuario.id !== id));
   };
 
   useEffect(() => {
-    axios.get('/db.json')
-      .then(response => {
-        const lista = response.data.usuarios || response.data;
-        setUsuarios(lista);
+    axios
+      .get('/db.json')
+      .then((response) => {
+        const lista = response.data?.usuarios || [];
+        setUsuarios(Array.isArray(lista) ? lista : []);
       })
-      .catch(error => {
-        console.error("Erro ao buscar usuários:", error);
+      .catch((error) => {
+        console.error('Erro ao buscar usuários:', error);
       });
   }, []);
 
@@ -61,7 +61,7 @@ function ListagemUsuarios() {
                   </tr>
                 </thead>
                 <tbody>
-                  {usuarios.map((dado) => ( 
+                  {usuarios.map((dado) => (
                     <tr key={dado.id}>
                       <td>{dado.id}</td>
                       <td>{dado.nome}</td>

@@ -1,28 +1,29 @@
 import React from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import NavbarItem from './navbarItem';
 
 function Navbar(props) {
-  let usuarioLogado = null;
-  try {
-    usuarioLogado = JSON.parse(localStorage.getItem('usuario_logado') || 'null');
-  } catch (e) {
-    usuarioLogado = null;
-  }
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const usuarioLogado = props.usuarioLogado || null;
 
   if (
     !usuarioLogado ||
-    window.location.pathname === '/' ||
-    window.location.pathname === '/login'
+    location.pathname === '/' ||
+    location.pathname === '/login'
   ) {
     return null;
   }
 
   const isAdmin =
-    String(usuarioLogado.perfil || '').toUpperCase() === 'ADMIN';
+    String(usuarioLogado.perfil || '').trim().toUpperCase() === 'ADMIN';
 
   const sair = () => {
-    localStorage.removeItem('usuario_logado');
-    window.location.replace('/login');
+    if (typeof props.onLogout === 'function') {
+      props.onLogout();
+    }
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -48,29 +49,10 @@ function Navbar(props) {
         </button>
         <div className='collapse navbar-collapse' id='navbarResponsive'>
           <ul className='navbar-nav me-auto'>
-            <NavbarItem
-              render={true}
-              href='/dashboard'
-              label='Dashboard'
-            />
-
-            <NavbarItem
-              render={true}
-              href='/listagem-tickets'
-              label='Tickets'
-            />
-
-            <NavbarItem
-              render={true}
-              href='/listagem-pagamentos'
-              label='Pagamentos'
-            />
-
-            <NavbarItem
-              render={true}
-              href='/listagem-caixa'
-              label='Caixa'
-            />
+            <NavbarItem render={true} href='/dashboard' label='Dashboard' />
+            <NavbarItem render={true} href='/listagem-tickets' label='Tickets' />
+            <NavbarItem render={true} href='/listagem-pagamentos' label='Pagamentos' />
+            <NavbarItem render={true} href='/listagem-caixa' label='Caixa' />
 
             {isAdmin && (
               <>
@@ -79,13 +61,11 @@ function Navbar(props) {
                   href='/listagem-categorias'
                   label='Categorias'
                 />
-
                 <NavbarItem
                   render={true}
                   href='/listagem-usuarios'
                   label='Usuarios'
                 />
-
                 <NavbarItem
                   render={true}
                   href='/relatorios'

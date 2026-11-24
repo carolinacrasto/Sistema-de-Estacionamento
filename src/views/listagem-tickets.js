@@ -4,17 +4,6 @@ import Stack from '@mui/material/Stack';
 import Card from '../components/card';
 import axios from 'axios';
 
-function lerStorageOuFallback(chave, fallback) {
-  try {
-    const raw = localStorage.getItem(chave);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : fallback;
-  } catch (e) {
-    return fallback;
-  }
-}
-
 function ListagemTickets() {
   const navigate = useNavigate();
 
@@ -27,23 +16,16 @@ function ListagemTickets() {
     axios
       .get('/db.json')
       .then((response) => {
-        const dbTickets = response.data?.tickets || [];
-        const dbCategorias = response.data?.categorias || [];
+        const listaTickets = response.data?.tickets || [];
+        const listaCategorias = response.data?.categorias || [];
 
-        if (!localStorage.getItem('scac_tickets') && dbTickets.length > 0) {
-          localStorage.setItem('scac_tickets', JSON.stringify(dbTickets));
-        }
-        if (!localStorage.getItem('scac_categorias') && dbCategorias.length > 0) {
-          localStorage.setItem('scac_categorias', JSON.stringify(dbCategorias));
-        }
-
-        setTickets(lerStorageOuFallback('scac_tickets', dbTickets));
-        setCategorias(lerStorageOuFallback('scac_categorias', dbCategorias));
+        setTickets(listaTickets);
+        setCategorias(listaCategorias);
       })
       .catch((error) => {
         console.error('Erro ao carregar tickets:', error);
-        setTickets(lerStorageOuFallback('scac_tickets', []));
-        setCategorias(lerStorageOuFallback('scac_categorias', []));
+        setTickets([]);
+        setCategorias([]);
       });
   }, []);
 
@@ -70,12 +52,10 @@ function ListagemTickets() {
     const atualizados = tickets.filter(
       (t) => Number(t.id) !== Number(ticket.id)
     );
-    localStorage.setItem('scac_tickets', JSON.stringify(atualizados));
     setTickets(atualizados);
 
     if (String(ticket.status || '').toUpperCase() === 'ABERTO') {
-      const catsAtuais = lerStorageOuFallback('scac_categorias', categorias);
-      const novasCats = catsAtuais.map((cat) => {
+      const novasCats = categorias.map((cat) => {
         const mesma =
           Number(cat.id) === Number(ticket.categoriaId) ||
           String(cat.nome || '').toLowerCase() ===
@@ -86,7 +66,6 @@ function ListagemTickets() {
           vagasOcupadas: Math.max(0, Number(cat.vagasOcupadas || 0) - 1),
         };
       });
-      localStorage.setItem('scac_categorias', JSON.stringify(novasCats));
       setCategorias(novasCats);
     }
   };
@@ -208,17 +187,31 @@ function ListagemTickets() {
                             </span>
                           </td>
                           <td>
-                            <Stack spacing={1} direction='row'>
-                              {estaAberto && (
-                                <button
-                                  type='button'
-                                  title='Encerrar e pagar ticket'
-                                  onClick={() => encerrarTicket(ticket)}
-                                  className='btn btn-success btn-sm'
-                                >
-                                  $
-                                </button>
-                              )}
+                            <Stack
+                              spacing={1}
+                              direction='row'
+                              alignItems='center'
+                            >
+                              <button
+                                type='button'
+                                disabled={!estaAberto}
+                                title={
+                                  estaAberto
+                                    ? 'Encerrar e pagar ticket'
+                                    : 'Ticket já encerrado'
+                                }
+                                onClick={() => encerrarTicket(ticket)}
+                                className={`btn btn-sm rounded-circle d-inline-flex align-items-center justify-content-center fw-bold ${
+                                  estaAberto ? 'btn-success' : 'btn-secondary'
+                                }`}
+                                style={{
+                                  width: '32px',
+                                  height: '32px',
+                                  padding: 0,
+                                }}
+                              >
+                                $
+                              </button>
                               <button
                                 type='button'
                                 title='Editar ticket'

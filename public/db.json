@@ -70,7 +70,7 @@
       "valorHora": 15,
       "valorDiaria": 70,
       "valorPernoite": 95,
-      "vagasTotais": 12,
+      "vagasTotais": 3,
       "vagasOcupadas": 3,
       "ativo": true
     }
@@ -134,7 +134,7 @@
       "dataSaida": "2026-11-24",
       "horaSaida": "13:35",
       "valorTotal": 10,
-      "status": "FECHADO"
+      "status": "FINALIZADO"
     },
     {
       "id": 6,
@@ -145,8 +145,20 @@
       "horaEntrada": "12:19",
       "dataSaida": "2026-11-24",
       "horaSaida": "13:35",
-      "valorTotal": 20,
-      "status": "FECHADO"
+      "valorTotal": 15,
+      "status": "FINALIZADO"
+    },
+    {
+      "id": 7,
+      "placa": "PRN8E90",
+      "categoriaId": 4,
+      "categoria": "Van",
+      "dataEntrada": "2026-11-23",
+      "horaEntrada": "23:15",
+      "dataSaida": null,
+      "horaSaida": null,
+      "valorTotal": null,
+      "status": "ABERTO"
     }
   ],
   "pagamentos": [
@@ -215,12 +227,24 @@
       "ticketId": 6,
       "caixaId": 1,
       "formaPagamento": "DINHEIRO",
-      "valor": 20,
-      "valorRecebido": 20,
+      "valor": 15,
+      "valorRecebido": 15,
       "troco": 0,
       "data": "2026-11-24",
       "hora": "13:35",
       "status": "PAGO"
+    },
+    {
+      "id": 7,
+      "ticketId": 7,
+      "caixaId": 1,
+      "formaPagamento": "PIX",
+      "valor": 95,
+      "valorRecebido": 0,
+      "troco": 0,
+      "data": "2026-11-23",
+      "hora": "23:15",
+      "status": "EM ABERTO"
     }
   ],
   "caixa": [

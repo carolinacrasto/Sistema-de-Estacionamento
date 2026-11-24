@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import toastr from 'toastr';
 
-function Login() {
+function Login(props) {
+  const navigate = useNavigate();
+
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -11,7 +14,10 @@ function Login() {
   const entrar = (e) => {
     e.preventDefault();
 
-    if (!email || !senha) {
+    const emailLimpo = String(email || '').trim().toLowerCase();
+    const senhaLimpa = String(senha || '').trim();
+
+    if (!emailLimpo || !senhaLimpa) {
       toastr.warning('Preencha o e-mail e a senha.');
       return;
     }
@@ -21,9 +27,17 @@ function Login() {
     axios
       .get('/db.json')
       .then((response) => {
-        const lista = response.data.usuarios || response.data;
+        const dados = response.data;
+        const lista = Array.isArray(dados?.usuarios)
+          ? dados.usuarios
+          : Array.isArray(dados)
+          ? dados
+          : [];
+
         const usuarioEncontrado = lista.find(
-          (u) => u.email === email && u.senha === senha
+          (u) =>
+            String(u.email || '').trim().toLowerCase() === emailLimpo &&
+            String(u.senha || '').trim() === senhaLimpa
         );
 
         if (!usuarioEncontrado) {
@@ -32,14 +46,21 @@ function Login() {
           return;
         }
 
-        if (!usuarioEncontrado.ativo) {
+        if (usuarioEncontrado.ativo === false) {
           toastr.error('Este usuário está inativo no sistema.');
           setCarregando(false);
           return;
         }
 
-        localStorage.setItem('usuario_logado', JSON.stringify(usuarioEncontrado));
-        window.location.replace('/dashboard');
+        if (typeof props.onLogin === 'function') {
+          props.onLogin(usuarioEncontrado);
+        }
+
+        toastr.success(
+          `Bem-vindo, ${usuarioEncontrado.nome || usuarioEncontrado.email}!`
+        );
+        setCarregando(false);
+        navigate('/dashboard');
       })
       .catch((error) => {
         console.error('Erro ao validar login:', error);

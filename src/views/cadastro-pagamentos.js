@@ -9,6 +9,7 @@ const FORMAS = ['PIX', 'DINHEIRO', 'CARTAO'];
 const TOLERANCIA_MIN = 15;
 const MEIA_HORA_MIN = 30;
 const MIN_POR_DIA = 1440;
+const LIMITE_HORAS_DIARIA_MIN = 300; // 5 horas
 
 const agora = () => {
   const d = new Date();
@@ -39,7 +40,7 @@ function calcularValor(ticket, categorias, dataSaida, horaSaida) {
   );
 
   const vHora = Number(cat?.valorHora ?? 10);
-  const vMeiaHora = vHora / 2; // Metade da hora
+  const vMeiaHora = vHora / 2;
   const vDiaria = Number(cat?.valorDiaria ?? 50);
   const vPernoite = Number(cat?.valorPernoite ?? vDiaria);
 
@@ -55,7 +56,7 @@ function calcularValor(ticket, categorias, dataSaida, horaSaida) {
 
   const mins = Math.floor((saida - entrada) / 60000);
 
-  // 1) Até 15 minutos: tolerância gratuita
+  // Tolerância gratuita de 15 minutos
   if (mins <= TOLERANCIA_MIN) {
     return {
       valor: 0,
@@ -63,71 +64,100 @@ function calcularValor(ticket, categorias, dataSaida, horaSaida) {
     };
   }
 
-  // 3) Pernoite: entrada entre 22:00 e 23:59 e saída até 06:00 do dia seguinte
-  const entrouNoturno = entrada.getHours() >= 22;
-  const inicioDiaSeguinte = new Date(
-    entrada.getFullYear(),
-    entrada.getMonth(),
-    entrada.getDate() + 1,
-    0,
-    0
-  );
-  const fimPernoite = new Date(
-    entrada.getFullYear(),
-    entrada.getMonth(),
-    entrada.getDate() + 1,
-    6,
-    0
-  );
-
-  if (entrouNoturno && saida >= inicioDiaSeguinte && saida <= fimPernoite) {
-    return {
-      valor: Number(vPernoite.toFixed(2)),
-      resumo: `Permanência: ${mins} min — Pernoite (22h–06h): ${moeda(vPernoite)}.`,
-    };
-  }
-
-  // Trecho após 15 min: cada bloco de 30 min (ou fração) cobra 1 meia-hora (vHora / 2)
-  const calcularTrechoMeiaHora = (minutosTrecho) => {
+  // Calcula um trecho avulso de até 24h:
+  // até 15 min = R$ 0; após 15 min = blocos de 30 min (vHora/2); acima de 5h (300 min) ou ao atingir vDiaria = vDiaria
+  const calcularTrecho = (minutosTrecho) => {
     if (minutosTrecho <= TOLERANCIA_MIN) {
-      return { valor: 0, meiasHoras: 0, aposTol: 0, diaria: false };
+      return { valor: 0, meiasHoras: 0, aposTol: 0, virouDiaria: false };
     }
     const aposTol = minutosTrecho - TOLERANCIA_MIN;
     const meiasHoras = Math.ceil(aposTol / MEIA_HORA_MIN);
     const totalMeias = Number((meiasHoras * vMeiaHora).toFixed(2));
-    const diaria = vDiaria > 0 && totalMeias >= vDiaria;
+    const virouDiaria =
+      minutosTrecho > LIMITE_HORAS_DIARIA_MIN || (vDiaria > 0 && totalMeias >= vDiaria);
+
     return {
-      valor: diaria ? Number(vDiaria.toFixed(2)) : totalMeias,
+      valor: virouDiaria ? Number(vDiaria.toFixed(2)) : totalMeias,
       meiasHoras,
       aposTol,
-      diaria,
+      virouDiaria,
     };
   };
 
-  let valorFinal = 0;
-  let resumo = '';
+  // 1) Entrada noturna (22:00 às 23:59): 1 Pernoite + cálculo do excesso após 06:00
+  const entrouNoturno = entrada.getHours() >= 22;
+  if (entrouNoturno) {
+    const inicioDiaSeguinte = new Date(
+      entrada.getFullYear(),
+      entrada.getMonth(),
+      entrada.getDate() + 1,
+      0,
+      0
+    );
+    const fimPernoite = new Date(
+      entrada.getFullYear(),
+      entrada.getMonth(),
+      entrada.getDate() + 1,
+      6,
+      0
+    );
 
-  // 2) Até 24h (1440 min): meia hora por bloco de 30 min após 15 min, limitado à diária
+    // Saída até 06:00 do dia seguinte: cobra apenas 1 pernoite
+    if (saida >= inicioDiaSeguinte && saida <= fimPernoite) {
+      return {
+        valor: Number(vPernoite.toFixed(2)),
+        resumo: `Permanência: ${mins} min — Pernoite (22h–06h): ${moeda(vPernoite)}.`,
+      };
+    }
+
+    // Após 06:00 do dia seguinte: 1 pernoite + dias inteiros de excesso (se houver) + trecho restante
+    const minutosExcesso = Math.max(0, Math.floor((saida - fimPernoite) / 60000));
+    const diasExtras = Math.floor(minutosExcesso / MIN_POR_DIA);
+    const restoExcesso = minutosExcesso % MIN_POR_DIA;
+    const rResto = calcularTrecho(restoExcesso);
+
+    const valorFinal = Number((vPernoite + diasExtras * vDiaria + rResto.valor).toFixed(2));
+
+    if (diasExtras > 0) {
+      const restoTxt =
+        restoExcesso <= TOLERANCIA_MIN
+          ? `${restoExcesso} min (tol.)`
+          : rResto.virouDiaria
+          ? `${restoExcesso} min → Diária (${moeda(rResto.valor)})`
+          : `${restoExcesso} min (${rResto.meiasHoras} meia(s)-hora(s): ${moeda(rResto.valor)})`;
+
+      return {
+        valor: valorFinal,
+        resumo: `Permanência: ${mins} min — Pernoite (${moeda(vPernoite)}) + ${diasExtras} diária(s) extra (${moeda(diasExtras * vDiaria)}) + ${restoTxt} = ${moeda(valorFinal)}.`,
+      };
+    }
+
+    const excessoTxt = rResto.virouDiaria
+      ? `Excesso > 5h (${minutosExcesso} min → Diária ${moeda(vDiaria)})`
+      : `Excesso ${minutosExcesso} min (${rResto.meiasHoras} meia(s)-hora(s): ${moeda(rResto.valor)})`;
+
+    return {
+      valor: valorFinal,
+      resumo: `Permanência: ${mins} min — Pernoite (${moeda(vPernoite)}) + ${excessoTxt} = ${moeda(valorFinal)}.`,
+    };
+  }
+
+  // 2) Permanência regular (entrada fora da janela 22h–23:59)
   if (mins <= MIN_POR_DIA) {
-    const r = calcularTrechoMeiaHora(mins);
-    valorFinal = r.valor;
-    resumo = r.diaria
-      ? `Permanência: ${mins} min (${r.aposTol} min após ${TOLERANCIA_MIN}m tol.) — Teto da Diária: ${moeda(vDiaria)}.`
-      : `Permanência: ${mins} min (${r.aposTol} min após ${TOLERANCIA_MIN}m tol.) — ${r.meiasHoras} meia(s)-hora(s) (${moeda(vMeiaHora)}/30m) = ${moeda(valorFinal)}.`;
-  } else {
-    // 4) Mais de 24h: dias completos (diária) + trecho restante
-    const dias = Math.floor(mins / MIN_POR_DIA);
-    const resto = mins % MIN_POR_DIA;
-    const rResto = calcularTrechoMeiaHora(resto);
-    valorFinal = Number((dias * vDiaria + rResto.valor).toFixed(2));
-    resumo = `Permanência: ${dias} dia(s) (${moeda(dias * vDiaria)}) + ${resto} min (${rResto.aposTol} min após tol.: ${moeda(rResto.valor)}) = ${moeda(valorFinal)}.`;
+    const r = calcularTrecho(mins);
+    const resumo = r.virouDiaria
+      ? `Permanência: ${mins} min (${r.aposTol} min após ${TOLERANCIA_MIN}m tol.) — Diária: ${moeda(vDiaria)}.`
+      : `Permanência: ${mins} min (${r.aposTol} min após ${TOLERANCIA_MIN}m tol.) — ${r.meiasHoras} meia(s)-hora(s) (${moeda(vMeiaHora)}/30m) = ${moeda(r.valor)}.`;
+    return { valor: r.valor, resumo };
   }
 
-  // Se entrou na janela noturna (22h–23:59) e passou das 06:00, garante piso do pernoite
-  if (entrouNoturno && saida > fimPernoite && valorFinal < vPernoite) {
-    valorFinal = Number(vPernoite.toFixed(2));
-    resumo = `Permanência: ${mins} min — Extensão pós-06h com piso de Pernoite: ${moeda(valorFinal)}.`;
-  }
+  const dias = Math.floor(mins / MIN_POR_DIA);
+  const resto = mins % MIN_POR_DIA;
+  const rResto = calcularTrecho(resto);
+  const valorFinal = Number((dias * vDiaria + rResto.valor).toFixed(2));
+  const resumo = rResto.virouDiaria
+    ? `Permanência: ${dias} dia(s) (${moeda(dias * vDiaria)}) + ${resto} min (Diária: ${moeda(vDiaria)}) = ${moeda(valorFinal)}.`
+    : `Permanência: ${dias} dia(s) (${moeda(dias * vDiaria)}) + ${resto} min (${rResto.aposTol} min após tol.: ${moeda(rResto.valor)}) = ${moeda(valorFinal)}.`;
 
   return { valor: valorFinal, resumo };
 }
@@ -215,7 +245,6 @@ function CadastroPagamentos() {
     [todosTickets, ticketId, ticketState]
   );
 
-  // Recalcula sempre que ticket, categorias, dataSaida ou horaSaida mudarem
   useEffect(() => {
     if (idParam || !ticketSelecionado) return;
     const calc = calcularValor(ticketSelecionado, categorias, dataSaida, horaSaida);
@@ -223,7 +252,6 @@ function CadastroPagamentos() {
     setResumoCalculo(calc.resumo);
   }, [idParam, ticketSelecionado, categorias, dataSaida, horaSaida]);
 
-  // Atualiza valorRecebido e troco quando formaPagamento, valor ou valorRecebido mudam
   useEffect(() => {
     const v = Number(valor || 0);
     const r = Number(valorRecebido || 0);

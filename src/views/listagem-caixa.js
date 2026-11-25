@@ -7,10 +7,13 @@ import { IconButton } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 
-function ListagemCaixa() {
+function ListagemCaixa(props) {
   const navigate = useNavigate();
   const [caixa, setCaixa] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
+
+  const isAdmin =
+    String(props.usuarioLogado?.perfil || '').trim().toUpperCase() === 'ADMIN';
 
   const cadastrar = () => {
     navigate('/cadastro-caixa');
@@ -20,8 +23,20 @@ function ListagemCaixa() {
     navigate(`/cadastro-caixa/${id}`);
   };
 
-  const excluir = (id) => {
-    setCaixa(caixa.filter((item) => item.id !== id));
+  const excluir = (dado) => {
+    if (!isAdmin) return;
+
+    if (String(dado.status || '').toUpperCase() === 'FECHADO') {
+      alert('Não é permitido excluir um caixa já FECHADO.');
+      return;
+    }
+
+    const confirmou = window.confirm(
+      `Deseja realmente excluir o registro de Caixa #${dado.id}?`
+    );
+    if (!confirmou) return;
+
+    setCaixa(caixa.filter((item) => item.id !== dado.id));
   };
 
   useEffect(() => {
@@ -40,6 +55,7 @@ function ListagemCaixa() {
 
   const obterNomeUsuario = (dado) => {
     if (dado.usuarioNome) return dado.usuarioNome;
+    if (dado.nomeOperador) return dado.nomeOperador;
     const usuario = usuarios.find((u) => Number(u.id) === Number(dado.usuarioId));
     return usuario ? usuario.nome : `Usuário #${dado.usuarioId}`;
   };
@@ -63,6 +79,12 @@ function ListagemCaixa() {
         <div className='row'>
           <div className='col-lg-12'>
             <div className='bs-component'>
+              {!isAdmin && (
+                <div className='alert alert-info py-2 px-3 mb-3'>
+                  Operadores não podem excluir registros de caixa. Exclusões são exclusivas de <strong>ADMIN</strong>.
+                </div>
+              )}
+
               <button
                 type='button'
                 className='btn btn-warning mb-3'
@@ -138,13 +160,24 @@ function ListagemCaixa() {
                               >
                                 <EditIcon />
                               </IconButton>
-                              <IconButton
-                                aria-label='delete'
-                                title='Excluir'
-                                onClick={() => excluir(dado.id)}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
+                              {isAdmin && !isAberto && (
+                                <IconButton
+                                  aria-label='delete'
+                                  title='Excluir'
+                                  onClick={() => excluir(dado)}
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              )}
+                              {isAdmin && isAberto && (
+                                <IconButton
+                                  aria-label='delete'
+                                  title='Excluir'
+                                  onClick={() => excluir(dado)}
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              )}
                             </Stack>
                           </td>
                         </tr>

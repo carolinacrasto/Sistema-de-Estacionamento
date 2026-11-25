@@ -4,8 +4,11 @@ import Stack from '@mui/material/Stack';
 import Card from '../components/card';
 import axios from 'axios';
 
-function ListagemTickets() {
+function ListagemTickets(props) {
   const navigate = useNavigate();
+
+  const isAdmin =
+    String(props.usuarioLogado?.perfil || '').trim().toUpperCase() === 'ADMIN';
 
   const [tickets, setTickets] = useState([]);
   const [categorias, setCategorias] = useState([]);
@@ -33,8 +36,13 @@ function ListagemTickets() {
     navigate('/cadastro-tickets');
   };
 
-  const editar = (id) => {
-    navigate(`/cadastro-tickets/${id}`);
+  const editar = (ticket) => {
+    const estaAberto = String(ticket.status || 'ABERTO').toUpperCase() === 'ABERTO';
+    if (!estaAberto && !isAdmin) {
+      alert('Tickets finalizados só podem ser alterados por um ADMIN.');
+      return;
+    }
+    navigate(`/cadastro-tickets/${ticket.id}`);
   };
 
   const encerrarTicket = (ticket) => {
@@ -44,6 +52,8 @@ function ListagemTickets() {
   };
 
   const excluir = (ticket) => {
+    if (!isAdmin) return;
+
     const confirmou = window.confirm(
       `Deseja realmente excluir o Ticket #${ticket.id} (${ticket.placa})?`
     );
@@ -158,6 +168,7 @@ function ListagemTickets() {
                         ticket.status || 'ABERTO'
                       ).toUpperCase();
                       const estaAberto = statusAtual === 'ABERTO';
+                      const podeEditar = estaAberto || isAdmin;
 
                       return (
                         <tr key={ticket.id}>
@@ -212,22 +223,31 @@ function ListagemTickets() {
                               >
                                 $
                               </button>
+
                               <button
                                 type='button'
-                                title='Editar ticket'
-                                onClick={() => editar(ticket.id)}
+                                disabled={!podeEditar}
+                                title={
+                                  podeEditar
+                                    ? 'Editar ticket'
+                                    : 'Apenas ADMIN pode editar ticket finalizado'
+                                }
+                                onClick={() => editar(ticket)}
                                 className='btn btn-primary btn-sm'
                               >
                                 Editar
                               </button>
-                              <button
-                                type='button'
-                                title='Excluir ticket'
-                                onClick={() => excluir(ticket)}
-                                className='btn btn-danger btn-sm'
-                              >
-                                Excluir
-                              </button>
+
+                              {isAdmin && (
+                                <button
+                                  type='button'
+                                  title='Excluir ticket (ADMIN)'
+                                  onClick={() => excluir(ticket)}
+                                  className='btn btn-danger btn-sm'
+                                >
+                                  Excluir
+                                </button>
+                              )}
                             </Stack>
                           </td>
                         </tr>

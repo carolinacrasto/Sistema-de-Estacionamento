@@ -7,20 +7,42 @@ import { IconButton } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 
-function ListagemPagamentos() {
+function ListagemPagamentos(props) {
   const navigate = useNavigate();
   const [pagamentos, setPagamentos] = useState([]);
+
+  const isAdmin =
+    String(props.usuarioLogado?.perfil || '').trim().toUpperCase() === 'ADMIN';
 
   const cadastrar = () => {
     navigate('/cadastro-pagamentos');
   };
 
-  const editar = (id) => {
-    navigate(`/cadastro-pagamentos/${id}`);
+  const editar = (dado) => {
+    const jaPago = String(dado.status || '').toUpperCase() === 'PAGO';
+    if (jaPago && !isAdmin) {
+      alert(
+        'Pagamento já finalizado (PAGO). Alteração permitida somente com autorização do ADMIN.'
+      );
+      return;
+    }
+    navigate(`/cadastro-pagamentos/${dado.id}`);
   };
 
-  const excluir = (id) => {
-    setPagamentos(pagamentos.filter((item) => item.id !== id));
+  const excluir = (dado) => {
+    if (!isAdmin) return;
+
+    if (String(dado.status || '').toUpperCase() === 'PAGO') {
+      alert('Não é permitido excluir um pagamento já PAGO.');
+      return;
+    }
+
+    const confirmou = window.confirm(
+      `Deseja realmente excluir o Pagamento #${dado.id}?`
+    );
+    if (!confirmou) return;
+
+    setPagamentos(pagamentos.filter((item) => item.id !== dado.id));
   };
 
   useEffect(() => {
@@ -74,6 +96,15 @@ function ListagemPagamentos() {
         <div className='row'>
           <div className='col-lg-12'>
             <div className='bs-component'>
+              {!isAdmin && (
+                <div className='alert alert-info py-2 px-3 mb-3'>
+                  Pagamentos já <strong>PAGO</strong> não podem ser alterados por{' '}
+                  <strong>OPERADOR</strong> (somente com autorização de{' '}
+                  <strong>ADMIN</strong>) e exclusões são exclusivas de{' '}
+                  <strong>ADMIN</strong>.
+                </div>
+              )}
+
               <button
                 type='button'
                 className='btn btn-warning mb-3'
@@ -99,7 +130,9 @@ function ListagemPagamentos() {
                 </thead>
                 <tbody>
                   {pagamentos.map((dado) => {
-                    const statusPag = String(dado.status || 'EM ABERTO').toUpperCase();
+                    const statusPag = String(
+                      dado.status || 'EM ABERTO'
+                    ).toUpperCase();
                     const isPago = statusPag === 'PAGO';
 
                     return (
@@ -125,18 +158,26 @@ function ListagemPagamentos() {
                           <Stack spacing={1} padding={0} direction='row'>
                             <IconButton
                               aria-label='edit'
-                              title='Editar'
-                              onClick={() => editar(dado.id)}
+                              disabled={isPago && !isAdmin}
+                              title={
+                                isPago && !isAdmin
+                                  ? 'Pagamento já PAGO — somente com autorização de ADMIN'
+                                  : 'Editar'
+                              }
+                              onClick={() => editar(dado)}
                             >
                               <EditIcon />
                             </IconButton>
-                            <IconButton
-                              aria-label='delete'
-                              title='Excluir'
-                              onClick={() => excluir(dado.id)}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
+
+                            {isAdmin && !isPago && (
+                              <IconButton
+                                aria-label='delete'
+                                title='Excluir'
+                                onClick={() => excluir(dado)}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            )}
                           </Stack>
                         </td>
                       </tr>

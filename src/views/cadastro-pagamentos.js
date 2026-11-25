@@ -56,7 +56,6 @@ function calcularValor(ticket, categorias, dataSaida, horaSaida) {
 
   const mins = Math.floor((saida - entrada) / 60000);
 
-  // Tolerância gratuita de 15 minutos
   if (mins <= TOLERANCIA_MIN) {
     return {
       valor: 0,
@@ -64,8 +63,6 @@ function calcularValor(ticket, categorias, dataSaida, horaSaida) {
     };
   }
 
-  // Calcula um trecho avulso de até 24h:
-  // até 15 min = R$ 0; após 15 min = blocos de 30 min (vHora/2); acima de 5h (300 min) ou ao atingir vDiaria = vDiaria
   const calcularTrecho = (minutosTrecho) => {
     if (minutosTrecho <= TOLERANCIA_MIN) {
       return { valor: 0, meiasHoras: 0, aposTol: 0, virouDiaria: false };
@@ -84,10 +81,6 @@ function calcularValor(ticket, categorias, dataSaida, horaSaida) {
     };
   };
 
-  // 1) Entrada noturna (22:00 às 23:59):
-  // - Saída no mesmo dia: trata como permanência regular
-  // - Saída de 00:00 até 06:00 do dia seguinte: 1 Pernoite
-  // - Saída após 06:00 do dia seguinte: 1 Pernoite + dias inteiros de excesso + trecho restante
   const entrouNoturno = entrada.getHours() >= 22;
   const mesmoDiaEntrada =
     entrada.getFullYear() === saida.getFullYear() &&
@@ -148,7 +141,6 @@ function calcularValor(ticket, categorias, dataSaida, horaSaida) {
     };
   }
 
-  // 2) Permanência regular (entrada fora da janela 22h–23:59 ou saída no mesmo dia)
   if (mins <= MIN_POR_DIA) {
     const r = calcularTrecho(mins);
     const resumo = r.virouDiaria
@@ -168,18 +160,22 @@ function calcularValor(ticket, categorias, dataSaida, horaSaida) {
   return { valor: valorFinal, resumo };
 }
 
-function CadastroPagamentos() {
+function CadastroPagamentos(props) {
   const { idParam } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  const ticketState = location.state?.ticket || null;
+  const isAdmin =
+    String(props.usuarioLogado?.perfil || '').trim().toUpperCase() === 'ADMIN';
+
+  const ticketState = useMemo(() => location.state?.ticket || null, [location.state]);
   const ticketQueryId = searchParams.get('ticketId');
   const veioPeloAtalho = Boolean(ticketState?.id || ticketQueryId);
   const inicial = agora();
 
   const [id, setId] = useState('');
+  const [statusPagamentoAtual, setStatusPagamentoAtual] = useState('EM ABERTO');
   const [todosTickets, setTodosTickets] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [pagamentos, setPagamentos] = useState([]);
@@ -194,6 +190,11 @@ function CadastroPagamentos() {
   const [resumoCalculo, setResumoCalculo] = useState('');
   const [erro, setErro] = useState('');
 
+  const bloqueadoSemAdmin =
+    Boolean(idParam) && statusPagamentoAtual === 'PAGO' && !isAdmin;
+
+  const podeEditarSaida = (Boolean(idParam) || isAdmin) && !bloqueadoSemAdmin;
+
   useEffect(() => {
     const dadoInicial = agora();
 
@@ -203,7 +204,9 @@ function CadastroPagamentos() {
         const ts = db?.tickets || [];
         const cs = db?.categorias || [];
         const ps = db?.pagamentos || [];
-        const cx = (db?.caixa || []).find((c) => String(c.status || '').toUpperCase() === 'ABERTO');
+        const cx = (db?.caixa || []).find(
+          (c) => String(c.status || '').toUpperCase() === 'ABERTO'
+        );
 
         setTodosTickets(ts);
         setCategorias(cs);
@@ -214,11 +217,14 @@ function CadastroPagamentos() {
           const p = ps.find((item) => Number(item.id) === Number(idParam));
           if (p) {
             setId(p.id);
+            setStatusPagamentoAtual(String(p.status || 'EM ABERTO').toUpperCase());
             setTicketId(String(p.ticketId || ''));
             setCaixaId(p.caixaId || 1);
             setDataSaida(p.data || dadoInicial.data);
             setHoraSaida(p.hora || dadoInicial.hora);
-            setFormaPagamento(String(p.formaPagamento || 'PIX').replace(/^R\$\s*/i, '').trim());
+            setFormaPagamento(
+              String(p.formaPagamento || 'PIX').replace(/^R\$\s*/i, '').trim()
+            );
             setValor(p.valor ?? '');
             setValorRecebido(p.valorRecebido ?? '');
             setTroco(p.troco ?? 0);
@@ -228,7 +234,8 @@ function CadastroPagamentos() {
 
         const alvo = ticketState?.id || ticketQueryId;
         if (alvo) {
-          const t = ts.find((item) => Number(item.id) === Number(alvo)) || ticketState;
+          const t =
+            ts.find((item) => Number(item.id) === Number(alvo)) || ticketState;
           if (t) {
             const now = agora();
             setTicketId(String(t.id));
@@ -240,9 +247,9 @@ function CadastroPagamentos() {
       .catch((err) => console.error('Erro ao carregar dados de pagamento:', err));
   }, [idParam, ticketQueryId, ticketState]);
 
-  // Atualiza data/hora de saída automaticamente em novos encerramentos
+  // Atualiza data/hora de saída automaticamente apenas para OPERADOR em novo encerramento
   useEffect(() => {
-    if (idParam) return;
+    if (idParam || isAdmin) return;
     const atualizarRelogio = () => {
       const now = agora();
       setDataSaida(now.data);
@@ -250,17 +257,22 @@ function CadastroPagamentos() {
     };
     const timer = setInterval(atualizarRelogio, 15000);
     return () => clearInterval(timer);
-  }, [idParam]);
+  }, [idParam, isAdmin]);
 
   const ticketsAbertos = useMemo(
-    () => todosTickets.filter((t) => String(t.status || '').toUpperCase() === 'ABERTO'),
+    () =>
+      todosTickets.filter(
+        (t) => String(t.status || '').toUpperCase() === 'ABERTO'
+      ),
     [todosTickets]
   );
 
   const ticketSelecionado = useMemo(
     () =>
       todosTickets.find((t) => Number(t.id) === Number(ticketId)) ||
-      (ticketState && Number(ticketState.id) === Number(ticketId) ? ticketState : null),
+      (ticketState && Number(ticketState.id) === Number(ticketId)
+        ? ticketState
+        : null),
     [todosTickets, ticketId, ticketState]
   );
 
@@ -269,12 +281,18 @@ function CadastroPagamentos() {
     return String(ticketSelecionado.status || '').toUpperCase() === 'FINALIZADO';
   }, [ticketSelecionado]);
 
+  // Recalcula valor e resumo sempre que mudar ticket, dataSaida ou horaSaida
   useEffect(() => {
-    if (idParam || !ticketSelecionado) return;
-    const calc = calcularValor(ticketSelecionado, categorias, dataSaida, horaSaida);
+    if (!ticketSelecionado || bloqueadoSemAdmin) return;
+    const calc = calcularValor(
+      ticketSelecionado,
+      categorias,
+      dataSaida,
+      horaSaida
+    );
     setValor(calc.valor);
     setResumoCalculo(calc.resumo);
-  }, [idParam, ticketSelecionado, categorias, dataSaida, horaSaida]);
+  }, [ticketSelecionado, categorias, dataSaida, horaSaida, bloqueadoSemAdmin]);
 
   useEffect(() => {
     const v = Number(valor || 0);
@@ -306,24 +324,43 @@ function CadastroPagamentos() {
   const confirmar = () => {
     setErro('');
 
+    if (bloqueadoSemAdmin) {
+      setErro(
+        'Operação negada: pagamento já PAGO só pode ser alterado por um ADMIN.'
+      );
+      return;
+    }
+
     if (!ticketId) {
       setErro('Selecione um ticket em aberto para encerrar.');
       return;
     }
 
     if (!idParam && ticketJaFinalizado) {
-      setErro(`O Ticket #${ticketId} já se encontra FINALIZADO e não pode ser encerrado novamente.`);
+      setErro(
+        `O Ticket #${ticketId} já se encontra FINALIZADO e não pode ser encerrado novamente.`
+      );
       return;
     }
 
-    const momentoFechamento = idParam ? { data: dataSaida, hora: horaSaida } : agora();
+    const momentoFechamento = podeEditarSaida
+      ? { data: dataSaida, hora: horaSaida }
+      : agora();
 
-    const calcFinal =
-      !idParam && ticketSelecionado
-        ? calcularValor(ticketSelecionado, categorias, momentoFechamento.data, momentoFechamento.hora)
-        : { valor: Number(valor || 0) };
+    const calcFinal = ticketSelecionado
+      ? calcularValor(
+          ticketSelecionado,
+          categorias,
+          momentoFechamento.data,
+          momentoFechamento.hora
+        )
+      : { valor: Number(valor || 0) };
 
-    const vFinal = Number(calcFinal.valor || 0);
+    const vFinal =
+      podeEditarSaida && valor !== ''
+        ? Number(valor)
+        : Number(calcFinal.valor || 0);
+
     const rFinal =
       formaPagamento === 'DINHEIRO'
         ? valorRecebido === ''
@@ -368,7 +405,9 @@ function CadastroPagamentos() {
     );
 
     setPagamentos(
-      idx >= 0 ? pagamentos.map((p, i) => (i === idx ? { ...p, ...pagSalvo } : p)) : [...pagamentos, pagSalvo]
+      idx >= 0
+        ? pagamentos.map((p, i) => (i === idx ? { ...p, ...pagSalvo } : p))
+        : [...pagamentos, pagSalvo]
     );
 
     setTodosTickets(
@@ -385,21 +424,32 @@ function CadastroPagamentos() {
       )
     );
 
-    const tEncerrado = todosTickets.find((t) => Number(t.id) === Number(ticketId));
-    if (tEncerrado && String(tEncerrado.status || '').toUpperCase() === 'ABERTO') {
+    const tEncerrado = todosTickets.find(
+      (t) => Number(t.id) === Number(ticketId)
+    );
+    if (
+      tEncerrado &&
+      String(tEncerrado.status || '').toUpperCase() === 'ABERTO'
+    ) {
       setCategorias(
         categorias.map((c) => {
           const mesma =
             Number(c.id) === Number(tEncerrado.categoriaId) ||
-            String(c.nome || '').toLowerCase() === String(tEncerrado.categoria || '').toLowerCase();
+            String(c.nome || '').toLowerCase() ===
+              String(tEncerrado.categoria || '').toLowerCase();
           return mesma
-            ? { ...c, vagasOcupadas: Math.max(0, Number(c.vagasOcupadas || 0) - 1) }
+            ? {
+                ...c,
+                vagasOcupadas: Math.max(0, Number(c.vagasOcupadas || 0) - 1),
+              }
             : c;
         })
       );
     }
 
-    alert(`Pagamento (${formaPagamento}) salvo e Ticket #${ticketId} encerrado! Já consta nos Relatórios.`);
+    alert(
+      `Pagamento (${formaPagamento}) salvo e Ticket #${ticketId} encerrado! Já consta nos Relatórios.`
+    );
     navigate('/relatorios');
   };
 
@@ -417,6 +467,13 @@ function CadastroPagamentos() {
         <div className='row'>
           <div className='col-lg-12'>
             <div className='bs-component'>
+              {bloqueadoSemAdmin && (
+                <div className='alert alert-warning py-2 px-3 mb-3'>
+                  Este pagamento já está <strong>PAGO</strong>. Somente um usuário{' '}
+                  <strong>ADMIN</strong> pode alterar este lançamento.
+                </div>
+              )}
+
               {erro && (
                 <div className='alert alert-danger py-2 px-3 mb-3'>{erro}</div>
               )}
@@ -434,7 +491,7 @@ function CadastroPagamentos() {
                       id='selectTicket'
                       className='form-select'
                       value={ticketId}
-                      disabled={veioPeloAtalho}
+                      disabled={veioPeloAtalho || bloqueadoSemAdmin}
                       onChange={selecionarTicket}
                     >
                       <option value=''>Selecione um ticket aberto...</option>
@@ -444,7 +501,9 @@ function CadastroPagamentos() {
                         </option>
                       ))}
                       {ticketSelecionado &&
-                        !ticketsAbertos.some((t) => Number(t.id) === Number(ticketSelecionado.id)) && (
+                        !ticketsAbertos.some(
+                          (t) => Number(t.id) === Number(ticketSelecionado.id)
+                        ) && (
                           <option value={ticketSelecionado.id}>
                             #{ticketSelecionado.id} - {ticketSelecionado.placa} (
                             {ticketSelecionado.status || 'ABERTO'})
@@ -461,8 +520,8 @@ function CadastroPagamentos() {
                       id='inputCaixaId'
                       value={caixaId}
                       className='form-control'
-                      readOnly={!idParam}
-                      disabled={!idParam}
+                      readOnly={!podeEditarSaida}
+                      disabled={!podeEditarSaida}
                       onChange={(e) => setCaixaId(e.target.value)}
                     />
                   </FormGroup>
@@ -473,17 +532,27 @@ function CadastroPagamentos() {
                 <div className='alert alert-secondary py-2 px-3 mb-3'>
                   <div>
                     <strong>Ticket #{ticketSelecionado.id}</strong> — Placa:{' '}
-                    <strong>{ticketSelecionado.placa}</strong> | Categoria: {ticketSelecionado.categoria} | Entrada:{' '}
-                    {ticketSelecionado.dataEntrada} às {ticketSelecionado.horaEntrada}
+                    <strong>{ticketSelecionado.placa}</strong> | Categoria:{' '}
+                    {ticketSelecionado.categoria} | Entrada:{' '}
+                    {ticketSelecionado.dataEntrada} às{' '}
+                    {ticketSelecionado.horaEntrada}
                   </div>
-                  {resumoCalculo && <small className='d-block mt-1 text-dark'>{resumoCalculo}</small>}
+                  {resumoCalculo && (
+                    <small className='d-block mt-1 text-dark'>
+                      {resumoCalculo}
+                    </small>
+                  )}
                 </div>
               )}
 
               <div className='row'>
                 <div className='col-md-6'>
                   <FormGroup
-                    label={idParam ? 'Data de Saída: *' : 'Data de Saída (Automática):'}
+                    label={
+                      podeEditarSaida
+                        ? 'Data de Saída: *'
+                        : 'Data de Saída (Automática):'
+                    }
                     htmlFor='inputDataSaida'
                   >
                     <input
@@ -491,8 +560,8 @@ function CadastroPagamentos() {
                       id='inputDataSaida'
                       value={dataSaida}
                       className='form-control'
-                      readOnly={!idParam}
-                      disabled={!idParam}
+                      readOnly={!podeEditarSaida}
+                      disabled={!podeEditarSaida}
                       onChange={(e) => setDataSaida(e.target.value)}
                     />
                   </FormGroup>
@@ -500,7 +569,11 @@ function CadastroPagamentos() {
 
                 <div className='col-md-6'>
                   <FormGroup
-                    label={idParam ? 'Hora de Saída: *' : 'Hora de Saída (Automática):'}
+                    label={
+                      podeEditarSaida
+                        ? 'Hora de Saída: *'
+                        : 'Hora de Saída (Automática):'
+                    }
                     htmlFor='inputHoraSaida'
                   >
                     <input
@@ -508,8 +581,8 @@ function CadastroPagamentos() {
                       id='inputHoraSaida'
                       value={horaSaida}
                       className='form-control'
-                      readOnly={!idParam}
-                      disabled={!idParam}
+                      readOnly={!podeEditarSaida}
+                      disabled={!podeEditarSaida}
                       onChange={(e) => setHoraSaida(e.target.value)}
                     />
                   </FormGroup>
@@ -522,6 +595,7 @@ function CadastroPagamentos() {
                     <button
                       key={f}
                       type='button'
+                      disabled={bloqueadoSemAdmin}
                       onClick={() => {
                         setFormaPagamento(f);
                         if (f !== 'DINHEIRO' && valor !== '') {
@@ -529,7 +603,11 @@ function CadastroPagamentos() {
                           setTroco(0);
                         }
                       }}
-                      className={`btn ${formaPagamento === f ? 'btn-primary' : 'btn-outline-secondary'}`}
+                      className={`btn ${
+                        formaPagamento === f
+                          ? 'btn-primary'
+                          : 'btn-outline-secondary'
+                      }`}
                     >
                       {f}
                     </button>
@@ -540,7 +618,7 @@ function CadastroPagamentos() {
               <div className='row mt-3'>
                 <div className='col-md-4'>
                   <FormGroup
-                    label={idParam ? 'Valor (R$): *' : 'Valor Calculado (R$):'}
+                    label={podeEditarSaida ? 'Valor (R$): *' : 'Valor Calculado (R$):'}
                     htmlFor='inputValor'
                   >
                     <input
@@ -549,8 +627,8 @@ function CadastroPagamentos() {
                       id='inputValor'
                       value={valor}
                       className='form-control'
-                      readOnly={!idParam}
-                      disabled={!idParam}
+                      readOnly={!podeEditarSaida}
+                      disabled={!podeEditarSaida}
                       onChange={(e) => setValor(e.target.value)}
                       placeholder='0.00'
                     />
@@ -558,14 +636,17 @@ function CadastroPagamentos() {
                 </div>
 
                 <div className='col-md-4'>
-                  <FormGroup label='Valor Recebido (R$):' htmlFor='inputValorRecebido'>
+                  <FormGroup
+                    label='Valor Recebido (R$):'
+                    htmlFor='inputValorRecebido'
+                  >
                     <input
                       type='number'
                       step='0.01'
                       id='inputValorRecebido'
                       value={valorRecebido}
                       className='form-control'
-                      disabled={formaPagamento !== 'DINHEIRO'}
+                      disabled={formaPagamento !== 'DINHEIRO' || bloqueadoSemAdmin}
                       onChange={(e) => setValorRecebido(e.target.value)}
                       placeholder='0.00'
                     />
@@ -591,12 +672,16 @@ function CadastroPagamentos() {
                   onClick={confirmar}
                   type='button'
                   className='btn btn-success'
-                  disabled={!idParam && ticketJaFinalizado}
+                  disabled={(!idParam && ticketJaFinalizado) || bloqueadoSemAdmin}
                 >
                   Confirmar Pagamento e Encerrar Ticket
                 </button>
                 <button
-                  onClick={() => navigate(veioPeloAtalho ? '/listagem-tickets' : '/listagem-pagamentos')}
+                  onClick={() =>
+                    navigate(
+                      veioPeloAtalho ? '/listagem-tickets' : '/listagem-pagamentos'
+                    )
+                  }
                   type='button'
                   className='btn btn-danger'
                 >

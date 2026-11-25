@@ -4,6 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import Stack from '@mui/material/Stack';
 import Card from '../components/card';
 
+function obterDataLocal() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 function Dashboard() {
   const navigate = useNavigate();
 
@@ -24,7 +30,7 @@ function Dashboard() {
       });
   }, []);
 
-  const hoje = new Date().toISOString().split('T')[0];
+  const hoje = obterDataLocal();
   const entradasHoje = tickets.filter((t) => t.dataEntrada === hoje).length;
   const ticketsAbertos = tickets.filter(
     (t) => String(t.status || '').toUpperCase() === 'ABERTO'

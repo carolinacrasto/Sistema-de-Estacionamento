@@ -10,6 +10,7 @@ import EditIcon from '@mui/icons-material/Edit';
 function ListagemUsuarios() {
   const navigate = useNavigate();
   const [usuarios, setUsuarios] = useState([]);
+  const [exibirSenhas, setExibirSenhas] = useState(false);
 
   const cadastrar = () => {
     navigate('/cadastro-usuarios');
@@ -20,6 +21,11 @@ function ListagemUsuarios() {
   };
 
   const excluir = (id) => {
+    const alvo = usuarios.find((u) => Number(u.id) === Number(id));
+    const confirmou = window.confirm(
+      `Deseja realmente excluir o usuário "${alvo?.nome || `#${id}`}"?`
+    );
+    if (!confirmou) return;
     setUsuarios(usuarios.filter((usuario) => usuario.id !== id));
   };
 
@@ -41,13 +47,23 @@ function ListagemUsuarios() {
         <div className='row'>
           <div className='col-lg-12'>
             <div className='bs-component'>
-              <button
-                type='button'
-                className='btn btn-warning mb-3'
-                onClick={() => cadastrar()}
-              >
-                Novo Usuário
-              </button>
+              <Stack spacing={1} direction='row' className='mb-3'>
+                <button
+                  type='button'
+                  className='btn btn-warning'
+                  onClick={() => cadastrar()}
+                >
+                  Novo Usuário
+                </button>
+                <button
+                  type='button'
+                  className='btn btn-outline-secondary'
+                  onClick={() => setExibirSenhas((prev) => !prev)}
+                >
+                  {exibirSenhas ? 'Ocultar Senhas' : 'Mostrar Senhas'}
+                </button>
+              </Stack>
+
               <table className='table table-hover'>
                 <thead>
                   <tr>
@@ -66,7 +82,7 @@ function ListagemUsuarios() {
                       <td>{dado.id}</td>
                       <td>{dado.nome}</td>
                       <td>{dado.email}</td>
-                      <td>{dado.senha}</td>
+                      <td>{exibirSenhas ? dado.senha : '••••••••'}</td>
                       <td>
                         <span className='badge bg-secondary'>{dado.perfil}</span>
                       </td>

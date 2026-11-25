@@ -11,14 +11,26 @@ const USUARIO_PADRAO = {
   perfil: 'OPERADOR',
 };
 
-function CadastroCaixa() {
+function obterDataHoraLocal() {
+  const agora = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return {
+    data: `${agora.getFullYear()}-${p(agora.getMonth() + 1)}-${p(agora.getDate())}`,
+    hora: `${p(agora.getHours())}:${p(agora.getMinutes())}`,
+  };
+}
+
+function CadastroCaixa(props) {
   const { idParam } = useParams();
   const navigate = useNavigate();
 
-  const [usuarioLogado, setUsuarioLogado] = useState(USUARIO_PADRAO);
+  const operadorSessao = props.usuarioLogado || USUARIO_PADRAO;
+
   const [id, setId] = useState('');
-  const [usuarioId, setUsuarioId] = useState(USUARIO_PADRAO.id);
-  const [usuarioNome, setUsuarioNome] = useState(USUARIO_PADRAO.nome);
+  const [listaCaixa, setListaCaixa] = useState([]);
+  const [pagamentos, setPagamentos] = useState([]);
+  const [usuarioId, setUsuarioId] = useState(operadorSessao.id);
+  const [usuarioNome, setUsuarioNome] = useState(operadorSessao.nome);
   const [dataAbertura, setDataAbertura] = useState('');
   const [horaAbertura, setHoraAbertura] = useState('');
   const [valorInicial, setValorInicial] = useState('');
@@ -28,32 +40,38 @@ function CadastroCaixa() {
   const [status, setStatus] = useState('ABERTO');
   const [sangrias, setSangrias] = useState([]);
   const [reforcos, setReforcos] = useState([]);
+  const [erro, setErro] = useState('');
 
   useEffect(() => {
+    const sessao = props.usuarioLogado || USUARIO_PADRAO;
+
     axios
       .get('/db.json')
       .then((response) => {
-        const listaCaixa = response.data?.caixa || [];
+        const caixas = response.data?.caixa || [];
         const listaUsuarios = response.data?.usuarios || [];
-        const operadorBase =
-          listaUsuarios.find((u) => u.ativo !== false) || USUARIO_PADRAO;
+        const listaPagamentos = response.data?.pagamentos || [];
 
-        setUsuarioLogado(operadorBase);
+        setListaCaixa(caixas);
+        setPagamentos(listaPagamentos);
 
         if (idParam) {
-          const caixaEncontrado = listaCaixa.find(
+          const caixaEncontrado = caixas.find(
             (c) => Number(c.id) === Number(idParam)
           );
 
           if (caixaEncontrado) {
             setId(caixaEncontrado.id);
-            setUsuarioId(caixaEncontrado.usuarioId || operadorBase.id);
+            setUsuarioId(caixaEncontrado.usuarioId || sessao.id);
 
             const dono = listaUsuarios.find(
               (u) => Number(u.id) === Number(caixaEncontrado.usuarioId)
             );
             setUsuarioNome(
-              caixaEncontrado.usuarioNome || dono?.nome || operadorBase.nome
+              caixaEncontrado.usuarioNome ||
+                caixaEncontrado.nomeOperador ||
+                dono?.nome ||
+                sessao.nome
             );
 
             setDataAbertura(caixaEncontrado.dataAbertura || '');
@@ -77,42 +95,107 @@ function CadastroCaixa() {
             setReforcos(caixaEncontrado.reforcos || []);
           }
         } else {
-          const agora = new Date();
-          const dataHoje = agora.toISOString().split('T')[0];
-          const horaAtual = agora.toTimeString().slice(0, 5);
-          setDataAbertura(dataHoje);
-          setHoraAbertura(horaAtual);
-          setUsuarioId(Number(operadorBase.id));
-          setUsuarioNome(operadorBase.nome);
+          const agora = obterDataHoraLocal();
+          setDataAbertura(agora.data);
+          setHoraAbertura(agora.hora);
+          setUsuarioId(Number(sessao.id));
+          setUsuarioNome(sessao.nome);
         }
       })
       .catch((error) => {
         console.error('Erro ao carregar caixa:', error);
         if (!idParam) {
-          const agora = new Date();
-          setDataAbertura(agora.toISOString().split('T')[0]);
-          setHoraAbertura(agora.toTimeString().slice(0, 5));
-          setUsuarioId(USUARIO_PADRAO.id);
-          setUsuarioNome(USUARIO_PADRAO.nome);
+          const agora = obterDataHoraLocal();
+          setDataAbertura(agora.data);
+          setHoraAbertura(agora.hora);
+          setUsuarioId(sessao.id);
+          setUsuarioNome(sessao.nome);
         }
       });
-  }, [idParam]);
+  }, [idParam, props.usuarioLogado]);
+
+  const calcularSaldoEsperado = () => {
+    const inicialNum = Number(valorInicial || 0);
+    const totalSangrias = (sangrias || []).reduce(
+      (acc, s) => acc + Number(s.valor || 0),
+      0
+    );
+    const totalReforcos = (reforcos || []).reduce(
+      (acc, r) => acc + Number(r.valor || 0),
+      0
+    );
+    const caixaRefId = id ? Number(id) : null;
+    const totalPagos = caixaRefId
+      ? (pagamentos || [])
+          .filter(
+            (p) =>
+              Number(p.caixaId) === caixaRefId &&
+              String(p.status || '').toUpperCase() === 'PAGO'
+          )
+          .reduce((acc, p) => acc + Number(p.valor || 0), 0)
+      : 0;
+
+    return Number(
+      (inicialNum + totalPagos + totalReforcos - totalSangrias).toFixed(2)
+    );
+  };
+
+  const aoMudarStatus = (novoStatus) => {
+    setStatus(novoStatus);
+    if (novoStatus === 'FECHADO') {
+      const agora = obterDataHoraLocal();
+      if (!dataFechamento) setDataFechamento(agora.data);
+      if (!horaFechamento) setHoraFechamento(agora.hora);
+      if (valorFinal === '') setValorFinal(calcularSaldoEsperado());
+    }
+  };
 
   const inicializar = () => {
     navigate('/listagem-caixa');
   };
 
   const salvar = () => {
+    setErro('');
+
+    if (!dataAbertura || !horaAbertura) {
+      setErro('Informe a data e a hora de abertura do caixa.');
+      return;
+    }
+
+    const inicialNum = Number(valorInicial);
+    if (valorInicial === '' || Number.isNaN(inicialNum) || inicialNum < 0) {
+      setErro('Informe um valor inicial válido (zero ou maior).');
+      return;
+    }
+
+    if (status === 'ABERTO') {
+      const outroAberto = listaCaixa.find(
+        (c) =>
+          String(c.status || '').toUpperCase() === 'ABERTO' &&
+          Number(c.id) !== Number(id)
+      );
+      if (outroAberto) {
+        setErro(
+          `Já existe o Caixa #${outroAberto.id} aberto (${outroAberto.nomeOperador || outroAberto.usuarioNome || 'Operador'}). Feche-o antes de abrir outro.`
+        );
+        return;
+      }
+    }
+
     const caixaData = {
       id: id ? Number(id) : Date.now(),
-      usuarioId: Number(usuarioId || usuarioLogado?.id || 1),
-      usuarioNome: usuarioNome || usuarioLogado?.nome || USUARIO_PADRAO.nome,
+      usuarioId: Number(usuarioId || operadorSessao.id || 1),
+      nomeOperador: usuarioNome || operadorSessao.nome || USUARIO_PADRAO.nome,
+      usuarioNome: usuarioNome || operadorSessao.nome || USUARIO_PADRAO.nome,
       dataAbertura,
       horaAbertura,
-      valorInicial: Number(valorInicial || 0),
-      dataFechamento: dataFechamento || null,
-      horaFechamento: horaFechamento || null,
-      valorFinal: valorFinal !== '' ? Number(valorFinal) : null,
+      valorInicial: Number(inicialNum.toFixed(2)),
+      dataFechamento: status === 'FECHADO' ? dataFechamento || null : null,
+      horaFechamento: status === 'FECHADO' ? horaFechamento || null : null,
+      valorFinal:
+        status === 'FECHADO' && valorFinal !== ''
+          ? Number(Number(valorFinal).toFixed(2))
+          : null,
       status,
       sangrias,
       reforcos,
@@ -129,11 +212,15 @@ function CadastroCaixa() {
         <div className='row'>
           <div className='col-lg-12'>
             <div className='bs-component'>
+              {erro && (
+                <div className='alert alert-danger py-2 px-3 mb-3'>{erro}</div>
+              )}
+
               <FormGroup label='Operador Responsável:' htmlFor='inputOperador'>
                 <input
                   type='text'
                   id='inputOperador'
-                  value={usuarioNome || usuarioLogado?.nome || 'Usuário logado'}
+                  value={usuarioNome || operadorSessao.nome}
                   className='form-control'
                   disabled
                   readOnly
@@ -169,6 +256,7 @@ function CadastroCaixa() {
                 <input
                   type='number'
                   step='0.01'
+                  min='0'
                   id='inputValorInicial'
                   value={valorInicial}
                   className='form-control'
@@ -182,7 +270,7 @@ function CadastroCaixa() {
                   className='form-select'
                   id='selectStatus'
                   value={status}
-                  onChange={(e) => setStatus(e.target.value)}
+                  onChange={(e) => aoMudarStatus(e.target.value)}
                 >
                   <option value='ABERTO'>ABERTO</option>
                   <option value='FECHADO'>FECHADO</option>

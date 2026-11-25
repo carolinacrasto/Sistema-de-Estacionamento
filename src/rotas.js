@@ -1,28 +1,28 @@
 import React, { useState } from 'react';
 import { Route, Routes, BrowserRouter, Navigate } from 'react-router-dom';
 
-import Navbar from './components/navbar.js';
+import Navbar from './components/navbar';
 
-import Login from './views/login.js';
-import Dashboard from './views/dashboard.js';
-import Relatorios from './views/relatorios.js';
+import Login from './views/login';
+import Dashboard from './views/dashboard';
+import Relatorios from './views/relatorios';
 
-import ListagemTickets from './views/listagem-tickets.js';
-import CadastroTickets from './views/cadastro-tickets.js';
+import ListagemTickets from './views/listagem-tickets';
+import CadastroTickets from './views/cadastro-tickets';
 
-import ListagemCaixa from './views/listagem-caixa.js';
-import CadastroCaixa from './views/cadastro-caixa.js';
-import CadastroSangria from './views/cadastro-sangria.js';
-import CadastroReforco from './views/cadastro-reforco.js';
+import ListagemCaixa from './views/listagem-caixa';
+import CadastroCaixa from './views/cadastro-caixa';
+import CadastroSangria from './views/cadastro-sangria';
+import CadastroReforco from './views/cadastro-reforco';
 
-import ListagemCategorias from './views/listagem-categorias.js';
-import CadastroCategorias from './views/cadastro-categorias.js';
+import ListagemCategorias from './views/listagem-categorias';
+import CadastroCategorias from './views/cadastro-categorias';
 
-import ListagemPagamentos from './views/listagem-pagamentos.js';
-import CadastroPagamentos from './views/cadastro-pagamentos.js';
+import ListagemPagamentos from './views/listagem-pagamentos';
+import CadastroPagamentos from './views/cadastro-pagamentos';
 
-import ListagemUsuarios from './views/listagem-usuarios.js';
-import CadastroUsuarios from './views/cadastro-usuarios.js';
+import ListagemUsuarios from './views/listagem-usuarios';
+import CadastroUsuarios from './views/cadastro-usuarios';
 
 function ehAdmin(usuario) {
   return String(usuario?.perfil || '').trim().toUpperCase() === 'ADMIN';
@@ -32,9 +32,11 @@ function RotaProtegida({ children, apenasAdmin = false, usuario }) {
   if (!usuario) {
     return <Navigate to='/login' replace />;
   }
+
   if (apenasAdmin && !ehAdmin(usuario)) {
     return <Navigate to='/dashboard' replace />;
   }
+
   return children;
 }
 
@@ -141,11 +143,11 @@ function Rotas() {
           }
         />
 
-        {/* Categorias (exclusivo ADMIN) */}
+        {/* Categorias: listagem aberta a usuários logados; cadastro/edição exclusivo ADMIN */}
         <Route
           path='/listagem-categorias'
           element={
-            <RotaProtegida apenasAdmin={true} usuario={usuarioAtual}>
+            <RotaProtegida usuario={usuarioAtual}>
               <ListagemCategorias usuarioLogado={usuarioAtual} />
             </RotaProtegida>
           }

@@ -84,9 +84,17 @@ function calcularValor(ticket, categorias, dataSaida, horaSaida) {
     };
   };
 
-  // 1) Entrada noturna (22:00 às 23:59): 1 Pernoite + cálculo do excesso após 06:00
+  // 1) Entrada noturna (22:00 às 23:59):
+  // - Saída no mesmo dia: trata como permanência regular
+  // - Saída de 00:00 até 06:00 do dia seguinte: 1 Pernoite
+  // - Saída após 06:00 do dia seguinte: 1 Pernoite + dias inteiros de excesso + trecho restante
   const entrouNoturno = entrada.getHours() >= 22;
-  if (entrouNoturno) {
+  const mesmoDiaEntrada =
+    entrada.getFullYear() === saida.getFullYear() &&
+    entrada.getMonth() === saida.getMonth() &&
+    entrada.getDate() === saida.getDate();
+
+  if (entrouNoturno && !mesmoDiaEntrada) {
     const inicioDiaSeguinte = new Date(
       entrada.getFullYear(),
       entrada.getMonth(),
@@ -102,7 +110,6 @@ function calcularValor(ticket, categorias, dataSaida, horaSaida) {
       0
     );
 
-    // Saída até 06:00 do dia seguinte: cobra apenas 1 pernoite
     if (saida >= inicioDiaSeguinte && saida <= fimPernoite) {
       return {
         valor: Number(vPernoite.toFixed(2)),
@@ -110,7 +117,6 @@ function calcularValor(ticket, categorias, dataSaida, horaSaida) {
       };
     }
 
-    // Após 06:00 do dia seguinte: 1 pernoite + dias inteiros de excesso (se houver) + trecho restante
     const minutosExcesso = Math.max(0, Math.floor((saida - fimPernoite) / 60000));
     const diasExtras = Math.floor(minutosExcesso / MIN_POR_DIA);
     const restoExcesso = minutosExcesso % MIN_POR_DIA;
@@ -142,7 +148,7 @@ function calcularValor(ticket, categorias, dataSaida, horaSaida) {
     };
   }
 
-  // 2) Permanência regular (entrada fora da janela 22h–23:59)
+  // 2) Permanência regular (entrada fora da janela 22h–23:59 ou saída no mesmo dia)
   if (mins <= MIN_POR_DIA) {
     const r = calcularTrecho(mins);
     const resumo = r.virouDiaria
@@ -186,8 +192,11 @@ function CadastroPagamentos() {
   const [valorRecebido, setValorRecebido] = useState('');
   const [troco, setTroco] = useState(0);
   const [resumoCalculo, setResumoCalculo] = useState('');
+  const [erro, setErro] = useState('');
 
   useEffect(() => {
+    const dadoInicial = agora();
+
     axios
       .get('/db.json')
       .then(({ data: db }) => {
@@ -207,8 +216,8 @@ function CadastroPagamentos() {
             setId(p.id);
             setTicketId(String(p.ticketId || ''));
             setCaixaId(p.caixaId || 1);
-            setDataSaida(p.data || inicial.data);
-            setHoraSaida(p.hora || inicial.hora);
+            setDataSaida(p.data || dadoInicial.data);
+            setHoraSaida(p.hora || dadoInicial.hora);
             setFormaPagamento(String(p.formaPagamento || 'PIX').replace(/^R\$\s*/i, '').trim());
             setValor(p.valor ?? '');
             setValorRecebido(p.valorRecebido ?? '');
@@ -222,16 +231,26 @@ function CadastroPagamentos() {
           const t = ts.find((item) => Number(item.id) === Number(alvo)) || ticketState;
           if (t) {
             const now = agora();
-            const dSaida = t.dataSaida || now.data;
-            const hSaida = t.horaSaida || now.hora;
             setTicketId(String(t.id));
-            setDataSaida(dSaida);
-            setHoraSaida(hSaida);
+            setDataSaida(now.data);
+            setHoraSaida(now.hora);
           }
         }
       })
       .catch((err) => console.error('Erro ao carregar dados de pagamento:', err));
   }, [idParam, ticketQueryId, ticketState]);
+
+  // Atualiza data/hora de saída automaticamente em novos encerramentos
+  useEffect(() => {
+    if (idParam) return;
+    const atualizarRelogio = () => {
+      const now = agora();
+      setDataSaida(now.data);
+      setHoraSaida(now.hora);
+    };
+    const timer = setInterval(atualizarRelogio, 15000);
+    return () => clearInterval(timer);
+  }, [idParam]);
 
   const ticketsAbertos = useMemo(
     () => todosTickets.filter((t) => String(t.status || '').toUpperCase() === 'ABERTO'),
@@ -244,6 +263,11 @@ function CadastroPagamentos() {
       (ticketState && Number(ticketState.id) === Number(ticketId) ? ticketState : null),
     [todosTickets, ticketId, ticketState]
   );
+
+  const ticketJaFinalizado = useMemo(() => {
+    if (!ticketSelecionado) return false;
+    return String(ticketSelecionado.status || '').toUpperCase() === 'FINALIZADO';
+  }, [ticketSelecionado]);
 
   useEffect(() => {
     if (idParam || !ticketSelecionado) return;
@@ -264,6 +288,7 @@ function CadastroPagamentos() {
   }, [formaPagamento, valor, valorRecebido]);
 
   const selecionarTicket = (e) => {
+    setErro('');
     const val = e.target.value;
     setTicketId(val);
     if (!val) {
@@ -279,12 +304,48 @@ function CadastroPagamentos() {
   };
 
   const confirmar = () => {
-    if (!ticketId) return alert('Selecione um ticket em aberto para encerrar.');
+    setErro('');
 
-    const vFinal = Number(valor || 0);
-    const rFinal = formaPagamento === 'DINHEIRO' ? Number(valorRecebido || vFinal) : vFinal;
-    const tFinal = formaPagamento === 'DINHEIRO' && rFinal > vFinal ? Number((rFinal - vFinal).toFixed(2)) : 0;
-    const novoId = id ? Number(id) : pagamentos.reduce((m, p) => Math.max(m, Number(p.id || 0)), 0) + 1;
+    if (!ticketId) {
+      setErro('Selecione um ticket em aberto para encerrar.');
+      return;
+    }
+
+    if (!idParam && ticketJaFinalizado) {
+      setErro(`O Ticket #${ticketId} já se encontra FINALIZADO e não pode ser encerrado novamente.`);
+      return;
+    }
+
+    const momentoFechamento = idParam ? { data: dataSaida, hora: horaSaida } : agora();
+
+    const calcFinal =
+      !idParam && ticketSelecionado
+        ? calcularValor(ticketSelecionado, categorias, momentoFechamento.data, momentoFechamento.hora)
+        : { valor: Number(valor || 0) };
+
+    const vFinal = Number(calcFinal.valor || 0);
+    const rFinal =
+      formaPagamento === 'DINHEIRO'
+        ? valorRecebido === ''
+          ? vFinal
+          : Number(valorRecebido)
+        : vFinal;
+
+    if (formaPagamento === 'DINHEIRO' && (Number.isNaN(rFinal) || rFinal < vFinal)) {
+      setErro(
+        `Valor recebido (${moeda(rFinal)}) é menor que o valor calculado (${moeda(vFinal)}).`
+      );
+      return;
+    }
+
+    const tFinal =
+      formaPagamento === 'DINHEIRO' && rFinal > vFinal
+        ? Number((rFinal - vFinal).toFixed(2))
+        : 0;
+
+    const novoId = id
+      ? Number(id)
+      : pagamentos.reduce((m, p) => Math.max(m, Number(p.id || 0)), 0) + 1;
 
     const pagSalvo = {
       id: novoId,
@@ -294,8 +355,8 @@ function CadastroPagamentos() {
       valor: vFinal,
       valorRecebido: rFinal,
       troco: tFinal,
-      data: dataSaida,
-      hora: horaSaida,
+      data: momentoFechamento.data,
+      hora: momentoFechamento.hora,
       status: 'PAGO',
     };
 
@@ -309,22 +370,31 @@ function CadastroPagamentos() {
     setPagamentos(
       idx >= 0 ? pagamentos.map((p, i) => (i === idx ? { ...p, ...pagSalvo } : p)) : [...pagamentos, pagSalvo]
     );
+
     setTodosTickets(
       todosTickets.map((t) =>
         Number(t.id) === Number(ticketId)
-          ? { ...t, dataSaida, horaSaida, valorTotal: vFinal, status: 'FINALIZADO' }
+          ? {
+              ...t,
+              dataSaida: momentoFechamento.data,
+              horaSaida: momentoFechamento.hora,
+              valorTotal: vFinal,
+              status: 'FINALIZADO',
+            }
           : t
       )
     );
 
     const tEncerrado = todosTickets.find((t) => Number(t.id) === Number(ticketId));
-    if (tEncerrado) {
+    if (tEncerrado && String(tEncerrado.status || '').toUpperCase() === 'ABERTO') {
       setCategorias(
         categorias.map((c) => {
           const mesma =
             Number(c.id) === Number(tEncerrado.categoriaId) ||
             String(c.nome || '').toLowerCase() === String(tEncerrado.categoria || '').toLowerCase();
-          return mesma ? { ...c, vagasOcupadas: Math.max(0, Number(c.vagasOcupadas || 0) - 1) } : c;
+          return mesma
+            ? { ...c, vagasOcupadas: Math.max(0, Number(c.vagasOcupadas || 0) - 1) }
+            : c;
         })
       );
     }
@@ -347,6 +417,16 @@ function CadastroPagamentos() {
         <div className='row'>
           <div className='col-lg-12'>
             <div className='bs-component'>
+              {erro && (
+                <div className='alert alert-danger py-2 px-3 mb-3'>{erro}</div>
+              )}
+
+              {!idParam && ticketJaFinalizado && (
+                <div className='alert alert-warning py-2 px-3 mb-3'>
+                  Atenção: o Ticket #{ticketId} já está <strong>FINALIZADO</strong>.
+                </div>
+              )}
+
               <div className='row'>
                 <div className='col-md-6'>
                   <FormGroup label='Ticket: *' htmlFor='selectTicket'>
@@ -366,7 +446,8 @@ function CadastroPagamentos() {
                       {ticketSelecionado &&
                         !ticketsAbertos.some((t) => Number(t.id) === Number(ticketSelecionado.id)) && (
                           <option value={ticketSelecionado.id}>
-                            #{ticketSelecionado.id} - {ticketSelecionado.placa} ({ticketSelecionado.status || 'ABERTO'})
+                            #{ticketSelecionado.id} - {ticketSelecionado.placa} (
+                            {ticketSelecionado.status || 'ABERTO'})
                           </option>
                         )}
                     </select>
@@ -380,6 +461,8 @@ function CadastroPagamentos() {
                       id='inputCaixaId'
                       value={caixaId}
                       className='form-control'
+                      readOnly={!idParam}
+                      disabled={!idParam}
                       onChange={(e) => setCaixaId(e.target.value)}
                     />
                   </FormGroup>
@@ -399,24 +482,34 @@ function CadastroPagamentos() {
 
               <div className='row'>
                 <div className='col-md-6'>
-                  <FormGroup label='Data de Saída: *' htmlFor='inputDataSaida'>
+                  <FormGroup
+                    label={idParam ? 'Data de Saída: *' : 'Data de Saída (Automática):'}
+                    htmlFor='inputDataSaida'
+                  >
                     <input
                       type='date'
                       id='inputDataSaida'
                       value={dataSaida}
                       className='form-control'
+                      readOnly={!idParam}
+                      disabled={!idParam}
                       onChange={(e) => setDataSaida(e.target.value)}
                     />
                   </FormGroup>
                 </div>
 
                 <div className='col-md-6'>
-                  <FormGroup label='Hora de Saída: *' htmlFor='inputHoraSaida'>
+                  <FormGroup
+                    label={idParam ? 'Hora de Saída: *' : 'Hora de Saída (Automática):'}
+                    htmlFor='inputHoraSaida'
+                  >
                     <input
                       type='time'
                       id='inputHoraSaida'
                       value={horaSaida}
                       className='form-control'
+                      readOnly={!idParam}
+                      disabled={!idParam}
                       onChange={(e) => setHoraSaida(e.target.value)}
                     />
                   </FormGroup>
@@ -446,13 +539,18 @@ function CadastroPagamentos() {
 
               <div className='row mt-3'>
                 <div className='col-md-4'>
-                  <FormGroup label='Valor Calculado (R$): *' htmlFor='inputValor'>
+                  <FormGroup
+                    label={idParam ? 'Valor (R$): *' : 'Valor Calculado (R$):'}
+                    htmlFor='inputValor'
+                  >
                     <input
                       type='number'
                       step='0.01'
                       id='inputValor'
                       value={valor}
                       className='form-control'
+                      readOnly={!idParam}
+                      disabled={!idParam}
                       onChange={(e) => setValor(e.target.value)}
                       placeholder='0.00'
                     />
@@ -489,7 +587,12 @@ function CadastroPagamentos() {
               </div>
 
               <Stack spacing={1} padding={1} direction='row' className='mt-2'>
-                <button onClick={confirmar} type='button' className='btn btn-success'>
+                <button
+                  onClick={confirmar}
+                  type='button'
+                  className='btn btn-success'
+                  disabled={!idParam && ticketJaFinalizado}
+                >
                   Confirmar Pagamento e Encerrar Ticket
                 </button>
                 <button

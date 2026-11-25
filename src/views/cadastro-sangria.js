@@ -11,10 +11,20 @@ const USUARIO_PADRAO = {
   perfil: 'OPERADOR',
 };
 
-function CadastroSangria() {
+function obterDataHoraLocal() {
+  const agora = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return {
+    data: `${agora.getFullYear()}-${p(agora.getMonth() + 1)}-${p(agora.getDate())}`,
+    hora: `${p(agora.getHours())}:${p(agora.getMinutes())}`,
+  };
+}
+
+function CadastroSangria(props) {
   const navigate = useNavigate();
 
-  const [usuarioLogado, setUsuarioLogado] = useState(USUARIO_PADRAO);
+  const operadorSessao = props.usuarioLogado || USUARIO_PADRAO;
+
   const [caixaAberto, setCaixaAberto] = useState(null);
   const [carregandoCaixa, setCarregandoCaixa] = useState(true);
   const [valor, setValor] = useState('');
@@ -26,12 +36,6 @@ function CadastroSangria() {
       .get('/db.json')
       .then((response) => {
         const listaCaixa = response.data?.caixa || [];
-        const listaUsuarios = response.data?.usuarios || [];
-        const operadorBase =
-          listaUsuarios.find((u) => u.ativo !== false) || USUARIO_PADRAO;
-
-        setUsuarioLogado(operadorBase);
-
         const aberto = listaCaixa.find(
           (c) => String(c.status || '').toUpperCase() === 'ABERTO'
         );
@@ -69,20 +73,20 @@ function CadastroSangria() {
       return;
     }
 
-    const agora = new Date();
+    const agora = obterDataHoraLocal();
     const sangriaData = {
       id: Date.now(),
       caixaId: caixaAberto.id,
-      usuarioId: usuarioLogado?.id ?? caixaAberto.usuarioId ?? USUARIO_PADRAO.id,
+      usuarioId: operadorSessao.id ?? caixaAberto.usuarioId ?? USUARIO_PADRAO.id,
       nomeOperador:
-        usuarioLogado?.nome ??
-        caixaAberto.nomeOperador ??
-        caixaAberto.usuarioNome ??
+        operadorSessao.nome ||
+        caixaAberto.nomeOperador ||
+        caixaAberto.usuarioNome ||
         USUARIO_PADRAO.nome,
       valor: Number(valorNum.toFixed(2)),
       justificativa: justificativa.trim(),
-      data: agora.toISOString().split('T')[0],
-      hora: agora.toTimeString().slice(0, 5),
+      data: agora.data,
+      hora: agora.hora,
     };
 
     console.log('Sangria registrada:', sangriaData);
@@ -108,13 +112,7 @@ function CadastroSangria() {
               ) : (
                 <div className='alert alert-info py-2 px-3 mb-3'>
                   Caixa aberto #{caixaAberto.id} — Operador:{' '}
-                  <strong>
-                    {usuarioLogado?.nome ||
-                      caixaAberto.nomeOperador ||
-                      caixaAberto.usuarioNome ||
-                      USUARIO_PADRAO.nome}
-                  </strong>{' '}
-                  | Valor inicial: R${' '}
+                  <strong>{operadorSessao.nome}</strong> | Valor inicial: R${' '}
                   {Number(caixaAberto.valorInicial || 0)
                     .toFixed(2)
                     .replace('.', ',')}

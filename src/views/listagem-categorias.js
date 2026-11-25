@@ -7,19 +7,30 @@ import { IconButton } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 
-function ListagemCategorias() {
+function ListagemCategorias(props) {
   const navigate = useNavigate();
   const [categorias, setCategorias] = useState([]);
 
+  const isAdmin =
+    String(props.usuarioLogado?.perfil || '').trim().toUpperCase() === 'ADMIN';
+
   const cadastrar = () => {
+    if (!isAdmin) return;
     navigate('/cadastro-categorias');
   };
 
   const editar = (id) => {
+    if (!isAdmin) return;
     navigate(`/cadastro-categorias/${id}`);
   };
 
   const excluir = (id) => {
+    if (!isAdmin) return;
+    const cat = categorias.find((c) => Number(c.id) === Number(id));
+    const confirmou = window.confirm(
+      `Deseja realmente excluir a categoria "${cat?.nome || `#${id}`}"?`
+    );
+    if (!confirmou) return;
     setCategorias(categorias.filter((categoria) => categoria.id !== id));
   };
 
@@ -46,13 +57,22 @@ function ListagemCategorias() {
         <div className='row'>
           <div className='col-lg-12'>
             <div className='bs-component'>
-              <button
-                type='button'
-                className='btn btn-warning mb-3'
-                onClick={() => cadastrar()}
-              >
-                Nova Categoria
-              </button>
+              {!isAdmin && (
+                <div className='alert alert-info py-2 px-3 mb-3'>
+                  Consulta de tarifas e vagas em modo somente leitura. Alterações são exclusivas de <strong>ADMIN</strong>.
+                </div>
+              )}
+
+              {isAdmin && (
+                <button
+                  type='button'
+                  className='btn btn-warning mb-3'
+                  onClick={() => cadastrar()}
+                >
+                  Nova Categoria
+                </button>
+              )}
+
               <table className='table table-hover'>
                 <thead>
                   <tr>
@@ -64,7 +84,7 @@ function ListagemCategorias() {
                     <th scope='col'>Vagas Totais</th>
                     <th scope='col'>Ocupadas</th>
                     <th scope='col'>Ativo</th>
-                    <th scope='col'>Ações</th>
+                    {isAdmin && <th scope='col'>Ações</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -78,22 +98,24 @@ function ListagemCategorias() {
                       <td>{dado.vagasTotais}</td>
                       <td>{dado.vagasOcupadas}</td>
                       <td>{dado.ativo ? 'Sim' : 'Não'}</td>
-                      <td>
-                        <Stack spacing={1} padding={0} direction='row'>
-                          <IconButton
-                            aria-label='edit'
-                            onClick={() => editar(dado.id)}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton
-                            aria-label='delete'
-                            onClick={() => excluir(dado.id)}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Stack>
-                      </td>
+                      {isAdmin && (
+                        <td>
+                          <Stack spacing={1} padding={0} direction='row'>
+                            <IconButton
+                              aria-label='edit'
+                              onClick={() => editar(dado.id)}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                            <IconButton
+                              aria-label='delete'
+                              onClick={() => excluir(dado.id)}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </Stack>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

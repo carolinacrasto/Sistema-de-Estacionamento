@@ -29,38 +29,37 @@ function Navbar(props) {
   return (
     <div className='navbar navbar-expand-lg fixed-top navbar-dark bg-primary'>
       <div className='container'>
-        <a
-          href='/dashboard'
-          className='navbar-brand fw-bold fs-5 me-4'
+        <button
+          type='button'
+          onClick={() => navigate('/dashboard')}
+          className='navbar-brand btn btn-link text-decoration-none fw-bold fs-5 me-4 p-0'
           style={{ letterSpacing: '0.5px' }}
         >
           Estaciona LP2
-        </a>
+        </button>
+
         <button
           className='navbar-toggler'
           type='button'
-          data-toggle='collapse'
-          data-target='#navbarResponsive'
+          data-bs-toggle='collapse'
+          data-bs-target='#navbarResponsive'
           aria-controls='navbarResponsive'
           aria-expanded='false'
           aria-label='Toggle navigation'
         >
           <span className='navbar-toggler-icon'></span>
         </button>
+
         <div className='collapse navbar-collapse' id='navbarResponsive'>
           <ul className='navbar-nav me-auto'>
             <NavbarItem render={true} href='/dashboard' label='Dashboard' />
             <NavbarItem render={true} href='/listagem-tickets' label='Tickets' />
             <NavbarItem render={true} href='/listagem-pagamentos' label='Pagamentos' />
             <NavbarItem render={true} href='/listagem-caixa' label='Caixa' />
+            <NavbarItem render={true} href='/listagem-categorias' label='Categorias' />
 
             {isAdmin && (
               <>
-                <NavbarItem
-                  render={true}
-                  href='/listagem-categorias'
-                  label='Categorias'
-                />
                 <NavbarItem
                   render={true}
                   href='/listagem-usuarios'
@@ -79,7 +78,11 @@ function Navbar(props) {
             <span className='me-3'>
               Olá, {usuarioLogado.nome} ({usuarioLogado.perfil})
             </span>
-            <button onClick={sair} className='btn btn-outline-light btn-sm'>
+            <button
+              type='button'
+              onClick={sair}
+              className='btn btn-outline-light btn-sm'
+            >
               Sair
             </button>
           </div>
